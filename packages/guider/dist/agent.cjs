@@ -342,7 +342,7 @@ var ROOT_ID = "guider-highlight-root";
 var STYLE_ID = "guider-highlight-style";
 var activeReposition = null;
 var listenersAttached = false;
-var lastPointer = { x: Math.round(window.innerWidth * 0.5), y: Math.round(window.innerHeight - 80) };
+var lastPointer = getInitialPointer();
 function ensureStyle() {
   if (document.getElementById(STYLE_ID)) return;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -480,6 +480,15 @@ function onKeydown(e) {
     e.preventDefault();
     (_d = activeKeyHandlers.next) == null ? void 0 : _d.call(activeKeyHandlers);
   }
+}
+function getInitialPointer() {
+  if (typeof window === "undefined") {
+    return { x: 640, y: 640 };
+  }
+  return {
+    x: Math.round(window.innerWidth * 0.5),
+    y: Math.round(window.innerHeight - 80)
+  };
 }
 async function show({ element, title, body, stepIndex, totalSteps, accent, onNext, onSkip }) {
   ensureStyle();

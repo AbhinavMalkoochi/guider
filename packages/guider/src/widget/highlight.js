@@ -13,7 +13,7 @@ const STYLE_ID = 'guider-highlight-style';
 
 let activeReposition = null;
 let listenersAttached = false;
-let lastPointer = { x: Math.round(window.innerWidth * 0.5), y: Math.round(window.innerHeight - 80) };
+let lastPointer = getInitialPointer();
 
 function ensureStyle() {
   if (document.getElementById(STYLE_ID)) return;
@@ -146,6 +146,16 @@ function onKeydown(e) {
     e.preventDefault();
     activeKeyHandlers.next?.();
   }
+}
+
+function getInitialPointer() {
+  if (typeof window === 'undefined') {
+    return { x: 640, y: 640 };
+  }
+  return {
+    x: Math.round(window.innerWidth * 0.5),
+    y: Math.round(window.innerHeight - 80),
+  };
 }
 
 export async function show({ element, title, body, stepIndex, totalSteps, accent, onNext, onSkip }) {
