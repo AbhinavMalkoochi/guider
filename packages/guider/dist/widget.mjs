@@ -1,110 +1,953 @@
 "use client";
 var __defProp = Object.defineProperty;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
 };
+
+// node_modules/html-to-image/es/util.js
+function resolveUrl(url, baseUrl) {
+  if (url.match(/^[a-z]+:\/\//i)) {
+    return url;
+  }
+  if (url.match(/^\/\//)) {
+    return window.location.protocol + url;
+  }
+  if (url.match(/^[a-z]+:/i)) {
+    return url;
+  }
+  const doc = document.implementation.createHTMLDocument();
+  const base = doc.createElement("base");
+  const a = doc.createElement("a");
+  doc.head.appendChild(base);
+  doc.body.appendChild(a);
+  if (baseUrl) {
+    base.href = baseUrl;
+  }
+  a.href = url;
+  return a.href;
+}
+function toArray(arrayLike) {
+  const arr = [];
+  for (let i = 0, l = arrayLike.length; i < l; i++) {
+    arr.push(arrayLike[i]);
+  }
+  return arr;
+}
+function getStyleProperties(options = {}) {
+  if (styleProps) {
+    return styleProps;
+  }
+  if (options.includeStyleProperties) {
+    styleProps = options.includeStyleProperties;
+    return styleProps;
+  }
+  styleProps = toArray(window.getComputedStyle(document.documentElement));
+  return styleProps;
+}
+function px(node, styleProperty) {
+  const win = node.ownerDocument.defaultView || window;
+  const val = win.getComputedStyle(node).getPropertyValue(styleProperty);
+  return val ? parseFloat(val.replace("px", "")) : 0;
+}
+function getNodeWidth(node) {
+  const leftBorder = px(node, "border-left-width");
+  const rightBorder = px(node, "border-right-width");
+  return node.clientWidth + leftBorder + rightBorder;
+}
+function getNodeHeight(node) {
+  const topBorder = px(node, "border-top-width");
+  const bottomBorder = px(node, "border-bottom-width");
+  return node.clientHeight + topBorder + bottomBorder;
+}
+function getImageSize(targetNode, options = {}) {
+  const width = options.width || getNodeWidth(targetNode);
+  const height = options.height || getNodeHeight(targetNode);
+  return { width, height };
+}
+function getPixelRatio() {
+  let ratio;
+  let FINAL_PROCESS;
+  try {
+    FINAL_PROCESS = process;
+  } catch (e) {
+  }
+  const val = FINAL_PROCESS && FINAL_PROCESS.env ? FINAL_PROCESS.env.devicePixelRatio : null;
+  if (val) {
+    ratio = parseInt(val, 10);
+    if (Number.isNaN(ratio)) {
+      ratio = 1;
+    }
+  }
+  return ratio || window.devicePixelRatio || 1;
+}
+function checkCanvasDimensions(canvas) {
+  if (canvas.width > canvasDimensionLimit || canvas.height > canvasDimensionLimit) {
+    if (canvas.width > canvasDimensionLimit && canvas.height > canvasDimensionLimit) {
+      if (canvas.width > canvas.height) {
+        canvas.height *= canvasDimensionLimit / canvas.width;
+        canvas.width = canvasDimensionLimit;
+      } else {
+        canvas.width *= canvasDimensionLimit / canvas.height;
+        canvas.height = canvasDimensionLimit;
+      }
+    } else if (canvas.width > canvasDimensionLimit) {
+      canvas.height *= canvasDimensionLimit / canvas.width;
+      canvas.width = canvasDimensionLimit;
+    } else {
+      canvas.width *= canvasDimensionLimit / canvas.height;
+      canvas.height = canvasDimensionLimit;
+    }
+  }
+}
+function canvasToBlob(canvas, options = {}) {
+  if (canvas.toBlob) {
+    return new Promise((resolve) => {
+      canvas.toBlob(resolve, options.type ? options.type : "image/png", options.quality ? options.quality : 1);
+    });
+  }
+  return new Promise((resolve) => {
+    const binaryString = window.atob(canvas.toDataURL(options.type ? options.type : void 0, options.quality ? options.quality : void 0).split(",")[1]);
+    const len = binaryString.length;
+    const binaryArray = new Uint8Array(len);
+    for (let i = 0; i < len; i += 1) {
+      binaryArray[i] = binaryString.charCodeAt(i);
+    }
+    resolve(new Blob([binaryArray], {
+      type: options.type ? options.type : "image/png"
+    }));
+  });
+}
+function createImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      img.decode().then(() => {
+        requestAnimationFrame(() => resolve(img));
+      });
+    };
+    img.onerror = reject;
+    img.crossOrigin = "anonymous";
+    img.decoding = "async";
+    img.src = url;
+  });
+}
+async function svgToDataURL(svg) {
+  return Promise.resolve().then(() => new XMLSerializer().serializeToString(svg)).then(encodeURIComponent).then((html) => `data:image/svg+xml;charset=utf-8,${html}`);
+}
+async function nodeToDataURL(node, width, height) {
+  const xmlns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(xmlns, "svg");
+  const foreignObject = document.createElementNS(xmlns, "foreignObject");
+  svg.setAttribute("width", `${width}`);
+  svg.setAttribute("height", `${height}`);
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  foreignObject.setAttribute("width", "100%");
+  foreignObject.setAttribute("height", "100%");
+  foreignObject.setAttribute("x", "0");
+  foreignObject.setAttribute("y", "0");
+  foreignObject.setAttribute("externalResourcesRequired", "true");
+  svg.appendChild(foreignObject);
+  foreignObject.appendChild(node);
+  return svgToDataURL(svg);
+}
+var uuid, styleProps, canvasDimensionLimit, isInstanceOfElement;
+var init_util = __esm({
+  "node_modules/html-to-image/es/util.js"() {
+    uuid = /* @__PURE__ */ (() => {
+      let counter = 0;
+      const random = () => (
+        // eslint-disable-next-line no-bitwise
+        `0000${(Math.random() * 36 ** 4 << 0).toString(36)}`.slice(-4)
+      );
+      return () => {
+        counter += 1;
+        return `u${random()}${counter}`;
+      };
+    })();
+    styleProps = null;
+    canvasDimensionLimit = 16384;
+    isInstanceOfElement = (node, instance) => {
+      if (node instanceof instance)
+        return true;
+      const nodePrototype = Object.getPrototypeOf(node);
+      if (nodePrototype === null)
+        return false;
+      return nodePrototype.constructor.name === instance.name || isInstanceOfElement(nodePrototype, instance);
+    };
+  }
+});
+
+// node_modules/html-to-image/es/clone-pseudos.js
+function formatCSSText(style) {
+  const content = style.getPropertyValue("content");
+  return `${style.cssText} content: '${content.replace(/'|"/g, "")}';`;
+}
+function formatCSSProperties(style, options) {
+  return getStyleProperties(options).map((name) => {
+    const value = style.getPropertyValue(name);
+    const priority = style.getPropertyPriority(name);
+    return `${name}: ${value}${priority ? " !important" : ""};`;
+  }).join(" ");
+}
+function getPseudoElementStyle(className, pseudo, style, options) {
+  const selector = `.${className}:${pseudo}`;
+  const cssText = style.cssText ? formatCSSText(style) : formatCSSProperties(style, options);
+  return document.createTextNode(`${selector}{${cssText}}`);
+}
+function clonePseudoElement(nativeNode, clonedNode, pseudo, options) {
+  const style = window.getComputedStyle(nativeNode, pseudo);
+  const content = style.getPropertyValue("content");
+  if (content === "" || content === "none") {
+    return;
+  }
+  const className = uuid();
+  try {
+    clonedNode.className = `${clonedNode.className} ${className}`;
+  } catch (err) {
+    return;
+  }
+  const styleElement = document.createElement("style");
+  styleElement.appendChild(getPseudoElementStyle(className, pseudo, style, options));
+  clonedNode.appendChild(styleElement);
+}
+function clonePseudoElements(nativeNode, clonedNode, options) {
+  clonePseudoElement(nativeNode, clonedNode, ":before", options);
+  clonePseudoElement(nativeNode, clonedNode, ":after", options);
+}
+var init_clone_pseudos = __esm({
+  "node_modules/html-to-image/es/clone-pseudos.js"() {
+    init_util();
+  }
+});
+
+// node_modules/html-to-image/es/mimes.js
+function getExtension(url) {
+  const match = /\.([^./]*?)$/g.exec(url);
+  return match ? match[1] : "";
+}
+function getMimeType(url) {
+  const extension = getExtension(url).toLowerCase();
+  return mimes[extension] || "";
+}
+var WOFF, JPEG, mimes;
+var init_mimes = __esm({
+  "node_modules/html-to-image/es/mimes.js"() {
+    WOFF = "application/font-woff";
+    JPEG = "image/jpeg";
+    mimes = {
+      woff: WOFF,
+      woff2: WOFF,
+      ttf: "application/font-truetype",
+      eot: "application/vnd.ms-fontobject",
+      png: "image/png",
+      jpg: JPEG,
+      jpeg: JPEG,
+      gif: "image/gif",
+      tiff: "image/tiff",
+      svg: "image/svg+xml",
+      webp: "image/webp"
+    };
+  }
+});
+
+// node_modules/html-to-image/es/dataurl.js
+function getContentFromDataUrl(dataURL) {
+  return dataURL.split(/,/)[1];
+}
+function isDataUrl(url) {
+  return url.search(/^(data:)/) !== -1;
+}
+function makeDataUrl(content, mimeType) {
+  return `data:${mimeType};base64,${content}`;
+}
+async function fetchAsDataURL(url, init, process2) {
+  const res = await fetch(url, init);
+  if (res.status === 404) {
+    throw new Error(`Resource "${res.url}" not found`);
+  }
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onloadend = () => {
+      try {
+        resolve(process2({ res, result: reader.result }));
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+function getCacheKey(url, contentType, includeQueryParams) {
+  let key = url.replace(/\?.*/, "");
+  if (includeQueryParams) {
+    key = url;
+  }
+  if (/ttf|otf|eot|woff2?/i.test(key)) {
+    key = key.replace(/.*\//, "");
+  }
+  return contentType ? `[${contentType}]${key}` : key;
+}
+async function resourceToDataURL(resourceUrl, contentType, options) {
+  const cacheKey = getCacheKey(resourceUrl, contentType, options.includeQueryParams);
+  if (cache[cacheKey] != null) {
+    return cache[cacheKey];
+  }
+  if (options.cacheBust) {
+    resourceUrl += (/\?/.test(resourceUrl) ? "&" : "?") + (/* @__PURE__ */ new Date()).getTime();
+  }
+  let dataURL;
+  try {
+    const content = await fetchAsDataURL(resourceUrl, options.fetchRequestInit, ({ res, result }) => {
+      if (!contentType) {
+        contentType = res.headers.get("Content-Type") || "";
+      }
+      return getContentFromDataUrl(result);
+    });
+    dataURL = makeDataUrl(content, contentType);
+  } catch (error) {
+    dataURL = options.imagePlaceholder || "";
+    let msg = `Failed to fetch resource: ${resourceUrl}`;
+    if (error) {
+      msg = typeof error === "string" ? error : error.message;
+    }
+    if (msg) {
+      console.warn(msg);
+    }
+  }
+  cache[cacheKey] = dataURL;
+  return dataURL;
+}
+var cache;
+var init_dataurl = __esm({
+  "node_modules/html-to-image/es/dataurl.js"() {
+    cache = {};
+  }
+});
+
+// node_modules/html-to-image/es/clone-node.js
+async function cloneCanvasElement(canvas) {
+  const dataURL = canvas.toDataURL();
+  if (dataURL === "data:,") {
+    return canvas.cloneNode(false);
+  }
+  return createImage(dataURL);
+}
+async function cloneVideoElement(video, options) {
+  if (video.currentSrc) {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = video.clientWidth;
+    canvas.height = video.clientHeight;
+    ctx === null || ctx === void 0 ? void 0 : ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataURL2 = canvas.toDataURL();
+    return createImage(dataURL2);
+  }
+  const poster = video.poster;
+  const contentType = getMimeType(poster);
+  const dataURL = await resourceToDataURL(poster, contentType, options);
+  return createImage(dataURL);
+}
+async function cloneIFrameElement(iframe, options) {
+  var _a;
+  try {
+    if ((_a = iframe === null || iframe === void 0 ? void 0 : iframe.contentDocument) === null || _a === void 0 ? void 0 : _a.body) {
+      return await cloneNode(iframe.contentDocument.body, options, true);
+    }
+  } catch (_b) {
+  }
+  return iframe.cloneNode(false);
+}
+async function cloneSingleNode(node, options) {
+  if (isInstanceOfElement(node, HTMLCanvasElement)) {
+    return cloneCanvasElement(node);
+  }
+  if (isInstanceOfElement(node, HTMLVideoElement)) {
+    return cloneVideoElement(node, options);
+  }
+  if (isInstanceOfElement(node, HTMLIFrameElement)) {
+    return cloneIFrameElement(node, options);
+  }
+  return node.cloneNode(isSVGElement(node));
+}
+async function cloneChildren(nativeNode, clonedNode, options) {
+  var _a, _b;
+  if (isSVGElement(clonedNode)) {
+    return clonedNode;
+  }
+  let children = [];
+  if (isSlotElement(nativeNode) && nativeNode.assignedNodes) {
+    children = toArray(nativeNode.assignedNodes());
+  } else if (isInstanceOfElement(nativeNode, HTMLIFrameElement) && ((_a = nativeNode.contentDocument) === null || _a === void 0 ? void 0 : _a.body)) {
+    children = toArray(nativeNode.contentDocument.body.childNodes);
+  } else {
+    children = toArray(((_b = nativeNode.shadowRoot) !== null && _b !== void 0 ? _b : nativeNode).childNodes);
+  }
+  if (children.length === 0 || isInstanceOfElement(nativeNode, HTMLVideoElement)) {
+    return clonedNode;
+  }
+  await children.reduce((deferred, child) => deferred.then(() => cloneNode(child, options)).then((clonedChild) => {
+    if (clonedChild) {
+      clonedNode.appendChild(clonedChild);
+    }
+  }), Promise.resolve());
+  return clonedNode;
+}
+function cloneCSSStyle(nativeNode, clonedNode, options) {
+  const targetStyle = clonedNode.style;
+  if (!targetStyle) {
+    return;
+  }
+  const sourceStyle = window.getComputedStyle(nativeNode);
+  if (sourceStyle.cssText) {
+    targetStyle.cssText = sourceStyle.cssText;
+    targetStyle.transformOrigin = sourceStyle.transformOrigin;
+  } else {
+    getStyleProperties(options).forEach((name) => {
+      let value = sourceStyle.getPropertyValue(name);
+      if (name === "font-size" && value.endsWith("px")) {
+        const reducedFont = Math.floor(parseFloat(value.substring(0, value.length - 2))) - 0.1;
+        value = `${reducedFont}px`;
+      }
+      if (isInstanceOfElement(nativeNode, HTMLIFrameElement) && name === "display" && value === "inline") {
+        value = "block";
+      }
+      if (name === "d" && clonedNode.getAttribute("d")) {
+        value = `path(${clonedNode.getAttribute("d")})`;
+      }
+      targetStyle.setProperty(name, value, sourceStyle.getPropertyPriority(name));
+    });
+  }
+}
+function cloneInputValue(nativeNode, clonedNode) {
+  if (isInstanceOfElement(nativeNode, HTMLTextAreaElement)) {
+    clonedNode.innerHTML = nativeNode.value;
+  }
+  if (isInstanceOfElement(nativeNode, HTMLInputElement)) {
+    clonedNode.setAttribute("value", nativeNode.value);
+  }
+}
+function cloneSelectValue(nativeNode, clonedNode) {
+  if (isInstanceOfElement(nativeNode, HTMLSelectElement)) {
+    const clonedSelect = clonedNode;
+    const selectedOption = Array.from(clonedSelect.children).find((child) => nativeNode.value === child.getAttribute("value"));
+    if (selectedOption) {
+      selectedOption.setAttribute("selected", "");
+    }
+  }
+}
+function decorate(nativeNode, clonedNode, options) {
+  if (isInstanceOfElement(clonedNode, Element)) {
+    cloneCSSStyle(nativeNode, clonedNode, options);
+    clonePseudoElements(nativeNode, clonedNode, options);
+    cloneInputValue(nativeNode, clonedNode);
+    cloneSelectValue(nativeNode, clonedNode);
+  }
+  return clonedNode;
+}
+async function ensureSVGSymbols(clone, options) {
+  const uses = clone.querySelectorAll ? clone.querySelectorAll("use") : [];
+  if (uses.length === 0) {
+    return clone;
+  }
+  const processedDefs = {};
+  for (let i = 0; i < uses.length; i++) {
+    const use = uses[i];
+    const id = use.getAttribute("xlink:href");
+    if (id) {
+      const exist = clone.querySelector(id);
+      const definition = document.querySelector(id);
+      if (!exist && definition && !processedDefs[id]) {
+        processedDefs[id] = await cloneNode(definition, options, true);
+      }
+    }
+  }
+  const nodes = Object.values(processedDefs);
+  if (nodes.length) {
+    const ns = "http://www.w3.org/1999/xhtml";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("xmlns", ns);
+    svg.style.position = "absolute";
+    svg.style.width = "0";
+    svg.style.height = "0";
+    svg.style.overflow = "hidden";
+    svg.style.display = "none";
+    const defs = document.createElementNS(ns, "defs");
+    svg.appendChild(defs);
+    for (let i = 0; i < nodes.length; i++) {
+      defs.appendChild(nodes[i]);
+    }
+    clone.appendChild(svg);
+  }
+  return clone;
+}
+async function cloneNode(node, options, isRoot) {
+  if (!isRoot && options.filter && !options.filter(node)) {
+    return null;
+  }
+  return Promise.resolve(node).then((clonedNode) => cloneSingleNode(clonedNode, options)).then((clonedNode) => cloneChildren(node, clonedNode, options)).then((clonedNode) => decorate(node, clonedNode, options)).then((clonedNode) => ensureSVGSymbols(clonedNode, options));
+}
+var isSlotElement, isSVGElement;
+var init_clone_node = __esm({
+  "node_modules/html-to-image/es/clone-node.js"() {
+    init_clone_pseudos();
+    init_util();
+    init_mimes();
+    init_dataurl();
+    isSlotElement = (node) => node.tagName != null && node.tagName.toUpperCase() === "SLOT";
+    isSVGElement = (node) => node.tagName != null && node.tagName.toUpperCase() === "SVG";
+  }
+});
+
+// node_modules/html-to-image/es/embed-resources.js
+function toRegex(url) {
+  const escaped = url.replace(/([.*+?^${}()|\[\]\/\\])/g, "\\$1");
+  return new RegExp(`(url\\(['"]?)(${escaped})(['"]?\\))`, "g");
+}
+function parseURLs(cssText) {
+  const urls = [];
+  cssText.replace(URL_REGEX, (raw, quotation, url) => {
+    urls.push(url);
+    return raw;
+  });
+  return urls.filter((url) => !isDataUrl(url));
+}
+async function embed(cssText, resourceURL, baseURL, options, getContentFromUrl) {
+  try {
+    const resolvedURL = baseURL ? resolveUrl(resourceURL, baseURL) : resourceURL;
+    const contentType = getMimeType(resourceURL);
+    let dataURL;
+    if (getContentFromUrl) {
+      const content = await getContentFromUrl(resolvedURL);
+      dataURL = makeDataUrl(content, contentType);
+    } else {
+      dataURL = await resourceToDataURL(resolvedURL, contentType, options);
+    }
+    return cssText.replace(toRegex(resourceURL), `$1${dataURL}$3`);
+  } catch (error) {
+  }
+  return cssText;
+}
+function filterPreferredFontFormat(str, { preferredFontFormat }) {
+  return !preferredFontFormat ? str : str.replace(FONT_SRC_REGEX, (match) => {
+    while (true) {
+      const [src, , format] = URL_WITH_FORMAT_REGEX.exec(match) || [];
+      if (!format) {
+        return "";
+      }
+      if (format === preferredFontFormat) {
+        return `src: ${src};`;
+      }
+    }
+  });
+}
+function shouldEmbed(url) {
+  return url.search(URL_REGEX) !== -1;
+}
+async function embedResources(cssText, baseUrl, options) {
+  if (!shouldEmbed(cssText)) {
+    return cssText;
+  }
+  const filteredCSSText = filterPreferredFontFormat(cssText, options);
+  const urls = parseURLs(filteredCSSText);
+  return urls.reduce((deferred, url) => deferred.then((css) => embed(css, url, baseUrl, options)), Promise.resolve(filteredCSSText));
+}
+var URL_REGEX, URL_WITH_FORMAT_REGEX, FONT_SRC_REGEX;
+var init_embed_resources = __esm({
+  "node_modules/html-to-image/es/embed-resources.js"() {
+    init_util();
+    init_mimes();
+    init_dataurl();
+    URL_REGEX = /url\((['"]?)([^'"]+?)\1\)/g;
+    URL_WITH_FORMAT_REGEX = /url\([^)]+\)\s*format\((["']?)([^"']+)\1\)/g;
+    FONT_SRC_REGEX = /src:\s*(?:url\([^)]+\)\s*format\([^)]+\)[,;]\s*)+/g;
+  }
+});
+
+// node_modules/html-to-image/es/embed-images.js
+async function embedProp(propName, node, options) {
+  var _a;
+  const propValue = (_a = node.style) === null || _a === void 0 ? void 0 : _a.getPropertyValue(propName);
+  if (propValue) {
+    const cssString = await embedResources(propValue, null, options);
+    node.style.setProperty(propName, cssString, node.style.getPropertyPriority(propName));
+    return true;
+  }
+  return false;
+}
+async function embedBackground(clonedNode, options) {
+  ;
+  await embedProp("background", clonedNode, options) || await embedProp("background-image", clonedNode, options);
+  await embedProp("mask", clonedNode, options) || await embedProp("-webkit-mask", clonedNode, options) || await embedProp("mask-image", clonedNode, options) || await embedProp("-webkit-mask-image", clonedNode, options);
+}
+async function embedImageNode(clonedNode, options) {
+  const isImageElement = isInstanceOfElement(clonedNode, HTMLImageElement);
+  if (!(isImageElement && !isDataUrl(clonedNode.src)) && !(isInstanceOfElement(clonedNode, SVGImageElement) && !isDataUrl(clonedNode.href.baseVal))) {
+    return;
+  }
+  const url = isImageElement ? clonedNode.src : clonedNode.href.baseVal;
+  const dataURL = await resourceToDataURL(url, getMimeType(url), options);
+  await new Promise((resolve, reject) => {
+    clonedNode.onload = resolve;
+    clonedNode.onerror = options.onImageErrorHandler ? (...attributes) => {
+      try {
+        resolve(options.onImageErrorHandler(...attributes));
+      } catch (error) {
+        reject(error);
+      }
+    } : reject;
+    const image = clonedNode;
+    if (image.decode) {
+      image.decode = resolve;
+    }
+    if (image.loading === "lazy") {
+      image.loading = "eager";
+    }
+    if (isImageElement) {
+      clonedNode.srcset = "";
+      clonedNode.src = dataURL;
+    } else {
+      clonedNode.href.baseVal = dataURL;
+    }
+  });
+}
+async function embedChildren(clonedNode, options) {
+  const children = toArray(clonedNode.childNodes);
+  const deferreds = children.map((child) => embedImages(child, options));
+  await Promise.all(deferreds).then(() => clonedNode);
+}
+async function embedImages(clonedNode, options) {
+  if (isInstanceOfElement(clonedNode, Element)) {
+    await embedBackground(clonedNode, options);
+    await embedImageNode(clonedNode, options);
+    await embedChildren(clonedNode, options);
+  }
+}
+var init_embed_images = __esm({
+  "node_modules/html-to-image/es/embed-images.js"() {
+    init_embed_resources();
+    init_util();
+    init_dataurl();
+    init_mimes();
+  }
+});
+
+// node_modules/html-to-image/es/apply-style.js
+function applyStyle(node, options) {
+  const { style } = node;
+  if (options.backgroundColor) {
+    style.backgroundColor = options.backgroundColor;
+  }
+  if (options.width) {
+    style.width = `${options.width}px`;
+  }
+  if (options.height) {
+    style.height = `${options.height}px`;
+  }
+  const manual = options.style;
+  if (manual != null) {
+    Object.keys(manual).forEach((key) => {
+      style[key] = manual[key];
+    });
+  }
+  return node;
+}
+var init_apply_style = __esm({
+  "node_modules/html-to-image/es/apply-style.js"() {
+  }
+});
+
+// node_modules/html-to-image/es/embed-webfonts.js
+async function fetchCSS(url) {
+  let cache2 = cssFetchCache[url];
+  if (cache2 != null) {
+    return cache2;
+  }
+  const res = await fetch(url);
+  const cssText = await res.text();
+  cache2 = { url, cssText };
+  cssFetchCache[url] = cache2;
+  return cache2;
+}
+async function embedFonts(data, options) {
+  let cssText = data.cssText;
+  const regexUrl = /url\(["']?([^"')]+)["']?\)/g;
+  const fontLocs = cssText.match(/url\([^)]+\)/g) || [];
+  const loadFonts = fontLocs.map(async (loc) => {
+    let url = loc.replace(regexUrl, "$1");
+    if (!url.startsWith("https://")) {
+      url = new URL(url, data.url).href;
+    }
+    return fetchAsDataURL(url, options.fetchRequestInit, ({ result }) => {
+      cssText = cssText.replace(loc, `url(${result})`);
+      return [loc, result];
+    });
+  });
+  return Promise.all(loadFonts).then(() => cssText);
+}
+function parseCSS(source) {
+  if (source == null) {
+    return [];
+  }
+  const result = [];
+  const commentsRegex = /(\/\*[\s\S]*?\*\/)/gi;
+  let cssText = source.replace(commentsRegex, "");
+  const keyframesRegex = new RegExp("((@.*?keyframes [\\s\\S]*?){([\\s\\S]*?}\\s*?)})", "gi");
+  while (true) {
+    const matches = keyframesRegex.exec(cssText);
+    if (matches === null) {
+      break;
+    }
+    result.push(matches[0]);
+  }
+  cssText = cssText.replace(keyframesRegex, "");
+  const importRegex = /@import[\s\S]*?url\([^)]*\)[\s\S]*?;/gi;
+  const combinedCSSRegex = "((\\s*?(?:\\/\\*[\\s\\S]*?\\*\\/)?\\s*?@media[\\s\\S]*?){([\\s\\S]*?)}\\s*?})|(([\\s\\S]*?){([\\s\\S]*?)})";
+  const unifiedRegex = new RegExp(combinedCSSRegex, "gi");
+  while (true) {
+    let matches = importRegex.exec(cssText);
+    if (matches === null) {
+      matches = unifiedRegex.exec(cssText);
+      if (matches === null) {
+        break;
+      } else {
+        importRegex.lastIndex = unifiedRegex.lastIndex;
+      }
+    } else {
+      unifiedRegex.lastIndex = importRegex.lastIndex;
+    }
+    result.push(matches[0]);
+  }
+  return result;
+}
+async function getCSSRules(styleSheets, options) {
+  const ret = [];
+  const deferreds = [];
+  styleSheets.forEach((sheet) => {
+    if ("cssRules" in sheet) {
+      try {
+        toArray(sheet.cssRules || []).forEach((item, index) => {
+          if (item.type === CSSRule.IMPORT_RULE) {
+            let importIndex = index + 1;
+            const url = item.href;
+            const deferred = fetchCSS(url).then((metadata) => embedFonts(metadata, options)).then((cssText) => parseCSS(cssText).forEach((rule) => {
+              try {
+                sheet.insertRule(rule, rule.startsWith("@import") ? importIndex += 1 : sheet.cssRules.length);
+              } catch (error) {
+                console.error("Error inserting rule from remote css", {
+                  rule,
+                  error
+                });
+              }
+            })).catch((e) => {
+              console.error("Error loading remote css", e.toString());
+            });
+            deferreds.push(deferred);
+          }
+        });
+      } catch (e) {
+        const inline = styleSheets.find((a) => a.href == null) || document.styleSheets[0];
+        if (sheet.href != null) {
+          deferreds.push(fetchCSS(sheet.href).then((metadata) => embedFonts(metadata, options)).then((cssText) => parseCSS(cssText).forEach((rule) => {
+            inline.insertRule(rule, inline.cssRules.length);
+          })).catch((err) => {
+            console.error("Error loading remote stylesheet", err);
+          }));
+        }
+        console.error("Error inlining remote css file", e);
+      }
+    }
+  });
+  return Promise.all(deferreds).then(() => {
+    styleSheets.forEach((sheet) => {
+      if ("cssRules" in sheet) {
+        try {
+          toArray(sheet.cssRules || []).forEach((item) => {
+            ret.push(item);
+          });
+        } catch (e) {
+          console.error(`Error while reading CSS rules from ${sheet.href}`, e);
+        }
+      }
+    });
+    return ret;
+  });
+}
+function getWebFontRules(cssRules) {
+  return cssRules.filter((rule) => rule.type === CSSRule.FONT_FACE_RULE).filter((rule) => shouldEmbed(rule.style.getPropertyValue("src")));
+}
+async function parseWebFontRules(node, options) {
+  if (node.ownerDocument == null) {
+    throw new Error("Provided element is not within a Document");
+  }
+  const styleSheets = toArray(node.ownerDocument.styleSheets);
+  const cssRules = await getCSSRules(styleSheets, options);
+  return getWebFontRules(cssRules);
+}
+function normalizeFontFamily(font) {
+  return font.trim().replace(/["']/g, "");
+}
+function getUsedFonts(node) {
+  const fonts = /* @__PURE__ */ new Set();
+  function traverse(node2) {
+    const fontFamily = node2.style.fontFamily || getComputedStyle(node2).fontFamily;
+    fontFamily.split(",").forEach((font) => {
+      fonts.add(normalizeFontFamily(font));
+    });
+    Array.from(node2.children).forEach((child) => {
+      if (child instanceof HTMLElement) {
+        traverse(child);
+      }
+    });
+  }
+  traverse(node);
+  return fonts;
+}
+async function getWebFontCSS(node, options) {
+  const rules = await parseWebFontRules(node, options);
+  const usedFonts = getUsedFonts(node);
+  const cssTexts = await Promise.all(rules.filter((rule) => usedFonts.has(normalizeFontFamily(rule.style.fontFamily))).map((rule) => {
+    const baseUrl = rule.parentStyleSheet ? rule.parentStyleSheet.href : null;
+    return embedResources(rule.cssText, baseUrl, options);
+  }));
+  return cssTexts.join("\n");
+}
+async function embedWebFonts(clonedNode, options) {
+  const cssText = options.fontEmbedCSS != null ? options.fontEmbedCSS : options.skipFonts ? null : await getWebFontCSS(clonedNode, options);
+  if (cssText) {
+    const styleNode = document.createElement("style");
+    const sytleContent = document.createTextNode(cssText);
+    styleNode.appendChild(sytleContent);
+    if (clonedNode.firstChild) {
+      clonedNode.insertBefore(styleNode, clonedNode.firstChild);
+    } else {
+      clonedNode.appendChild(styleNode);
+    }
+  }
+}
+var cssFetchCache;
+var init_embed_webfonts = __esm({
+  "node_modules/html-to-image/es/embed-webfonts.js"() {
+    init_util();
+    init_dataurl();
+    init_embed_resources();
+    cssFetchCache = {};
+  }
+});
+
+// node_modules/html-to-image/es/index.js
+var es_exports = {};
+__export(es_exports, {
+  getFontEmbedCSS: () => getFontEmbedCSS,
+  toBlob: () => toBlob,
+  toCanvas: () => toCanvas,
+  toJpeg: () => toJpeg,
+  toPixelData: () => toPixelData,
+  toPng: () => toPng,
+  toSvg: () => toSvg
+});
+async function toSvg(node, options = {}) {
+  const { width, height } = getImageSize(node, options);
+  const clonedNode = await cloneNode(node, options, true);
+  await embedWebFonts(clonedNode, options);
+  await embedImages(clonedNode, options);
+  applyStyle(clonedNode, options);
+  const datauri = await nodeToDataURL(clonedNode, width, height);
+  return datauri;
+}
+async function toCanvas(node, options = {}) {
+  const { width, height } = getImageSize(node, options);
+  const svg = await toSvg(node, options);
+  const img = await createImage(svg);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  const ratio = options.pixelRatio || getPixelRatio();
+  const canvasWidth = options.canvasWidth || width;
+  const canvasHeight = options.canvasHeight || height;
+  canvas.width = canvasWidth * ratio;
+  canvas.height = canvasHeight * ratio;
+  if (!options.skipAutoScale) {
+    checkCanvasDimensions(canvas);
+  }
+  canvas.style.width = `${canvasWidth}`;
+  canvas.style.height = `${canvasHeight}`;
+  if (options.backgroundColor) {
+    context.fillStyle = options.backgroundColor;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  context.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+async function toPixelData(node, options = {}) {
+  const { width, height } = getImageSize(node, options);
+  const canvas = await toCanvas(node, options);
+  const ctx = canvas.getContext("2d");
+  return ctx.getImageData(0, 0, width, height).data;
+}
+async function toPng(node, options = {}) {
+  const canvas = await toCanvas(node, options);
+  return canvas.toDataURL();
+}
+async function toJpeg(node, options = {}) {
+  const canvas = await toCanvas(node, options);
+  return canvas.toDataURL("image/jpeg", options.quality || 1);
+}
+async function toBlob(node, options = {}) {
+  const canvas = await toCanvas(node, options);
+  const blob = await canvasToBlob(canvas);
+  return blob;
+}
+async function getFontEmbedCSS(node, options = {}) {
+  return getWebFontCSS(node, options);
+}
+var init_es = __esm({
+  "node_modules/html-to-image/es/index.js"() {
+    init_clone_node();
+    init_embed_images();
+    init_apply_style();
+    init_embed_webfonts();
+    init_util();
+  }
+});
 
 // src/widget/GuiderWidget.jsx
 import React, { useEffect, useRef, useState, useCallback } from "react";
 
 // src/widget/screenshot.js
 async function captureViewport() {
-  const { default: html2canvas } = await import("html2canvas");
-  const options = {
-    backgroundColor: null,
-    useCORS: true,
-    logging: false,
-    scale: Math.min(window.devicePixelRatio || 1, 2),
-    x: window.scrollX,
-    y: window.scrollY,
-    width: window.innerWidth,
-    height: window.innerHeight,
-    windowWidth: document.documentElement.clientWidth,
-    windowHeight: document.documentElement.clientHeight,
-    ignoreElements: (element) => shouldIgnoreElement(element),
-    onclone: (clonedDoc) => sanitizeClonedDocument(document, clonedDoc)
-  };
-  let canvas;
+  const { toJpeg: toJpeg2 } = await Promise.resolve().then(() => (init_es(), es_exports));
+  const root = document.documentElement;
   try {
-    canvas = await html2canvas(document.body, options);
+    return await toJpeg2(root, {
+      quality: 0.72,
+      cacheBust: true,
+      backgroundColor: "#ffffff",
+      pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+      canvasWidth: Math.round(window.innerWidth * Math.min(window.devicePixelRatio || 1, 2)),
+      canvasHeight: Math.round(window.innerHeight * Math.min(window.devicePixelRatio || 1, 2)),
+      width: window.innerWidth,
+      height: window.innerHeight,
+      skipFonts: true,
+      style: {
+        margin: "0",
+        transform: "none",
+        transformOrigin: "top left"
+      },
+      filter: (node) => shouldIncludeNode(node)
+    });
   } catch {
-    try {
-      canvas = await html2canvas(document.documentElement, options);
-    } catch {
-      canvas = createFallbackCanvas();
-    }
-  }
-  return canvas.toDataURL("image/jpeg", 0.7);
-}
-var UNSUPPORTED_COLOR_FN = /(oklch|oklab|lch|lab|color-mix)\(/i;
-var UNSUPPORTED_COLOR_SPACE = /\sin\s+(oklch|oklab|lch|lab)\b/gi;
-var COLOR_PROPS = [
-  "color",
-  "backgroundColor",
-  "borderTopColor",
-  "borderRightColor",
-  "borderBottomColor",
-  "borderLeftColor",
-  "outlineColor",
-  "textDecorationColor",
-  "caretColor",
-  "fill",
-  "stroke",
-  "boxShadow",
-  "textShadow"
-];
-function shouldIgnoreElement(element) {
-  var _a;
-  return !!((_a = element == null ? void 0 : element.closest) == null ? void 0 : _a.call(element, "[data-guider-panel], [data-guider-launcher], [data-guider-dock], #guider-highlight-root"));
-}
-function sanitizeClonedDocument(sourceDoc, clonedDoc) {
-  const sourceRootStyle = getComputedStyle(sourceDoc.documentElement);
-  const cloneRootStyle = clonedDoc.documentElement.style;
-  for (const name of sourceRootStyle) {
-    if (!name.startsWith("--")) continue;
-    const value = sourceRootStyle.getPropertyValue(name);
-    if (UNSUPPORTED_COLOR_FN.test(value)) {
-      cloneRootStyle.setProperty(name, "#000000");
-    }
-  }
-  for (const styleEl of clonedDoc.querySelectorAll("style")) {
-    if (!styleEl.textContent || !UNSUPPORTED_COLOR_FN.test(styleEl.textContent)) continue;
-    styleEl.textContent = sanitizeCssText(styleEl.textContent);
-  }
-  for (const cloneEl of clonedDoc.querySelectorAll("[style]")) {
-    const inlineStyle = cloneEl.getAttribute("style");
-    if (!inlineStyle || !UNSUPPORTED_COLOR_FN.test(inlineStyle)) continue;
-    cloneEl.setAttribute("style", sanitizeCssText(inlineStyle));
-  }
-  for (const widgetEl of clonedDoc.querySelectorAll("[data-guider-panel], [data-guider-launcher], [data-guider-dock], #guider-highlight-root")) {
-    widgetEl.remove();
-  }
-  const sourceEls = sourceDoc.querySelectorAll("*");
-  const cloneEls = clonedDoc.querySelectorAll("*");
-  const len = Math.min(sourceEls.length, cloneEls.length);
-  for (let i = 0; i < len; i += 1) {
-    const sourceEl = sourceEls[i];
-    const cloneEl = cloneEls[i];
-    const computed = getComputedStyle(sourceEl);
-    for (const prop of COLOR_PROPS) {
-      const value = computed[prop];
-      if (!value || !UNSUPPORTED_COLOR_FN.test(value)) continue;
-      if (prop === "boxShadow" || prop === "textShadow") {
-        cloneEl.style[prop] = "none";
-        continue;
-      }
-      cloneEl.style[prop] = fallbackColor(prop);
-    }
+    return createFallbackCanvas().toDataURL("image/jpeg", 0.72);
   }
 }
-function fallbackColor(prop) {
-  if (prop === "backgroundColor") return "transparent";
-  if (prop === "fill" || prop === "stroke") return "#000000";
-  return "#111111";
-}
-function sanitizeCssText(cssText) {
-  return cssText.replace(/color-mix\([^)]*\)/gi, "rgba(17,17,17,0.12)").replace(/oklch\([^)]*\)/gi, "rgb(17 17 17)").replace(/oklab\([^)]*\)/gi, "rgb(17 17 17)").replace(new RegExp("(?<!-)\\blch\\([^)]*\\)", "gi"), "rgb(17 17 17)").replace(new RegExp("(?<!-)\\blab\\([^)]*\\)", "gi"), "rgb(17 17 17)").replace(UNSUPPORTED_COLOR_SPACE, "");
+function shouldIncludeNode(node) {
+  if (!(node instanceof Element)) return true;
+  return !node.closest("[data-guider-panel], [data-guider-launcher], [data-guider-cursor], #guider-highlight-root");
 }
 function createFallbackCanvas() {
   const canvas = document.createElement("canvas");
@@ -943,7 +1786,6 @@ function GuiderWidget({
   whisperUrl,
   proxyUrl,
   currentRoute,
-  position = "bottom-center",
   accent = "#3080ff",
   agent = true,
   speak = true,
@@ -959,8 +1801,8 @@ function GuiderWidget({
   const [stepIdx, setStepIdx] = useState(0);
   const [agentRunning, setAgentRunning] = useState(false);
   const [agentEnabled, setAgentEnabled] = useState(false);
+  const [cursor, setCursor] = useState(() => ({ x: 28, y: 28 }));
   const recorderRef = useRef(null);
-  const panelRef = useRef(null);
   const inputRef = useRef(null);
   const launcherRef = useRef(null);
   const liveRef = useRef(null);
@@ -997,64 +1839,29 @@ function GuiderWidget({
   }, []);
   useEffect(() => () => stopSpeaking(), []);
   useEffect(() => {
-    var _a;
-    if (!open) {
-      (_a = launcherRef.current) == null ? void 0 : _a.focus();
-      return;
-    }
-    setTimeout(() => {
-      var _a2;
-      return (_a2 = inputRef.current) == null ? void 0 : _a2.focus();
-    }, 30);
-    const onKey = (e) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        return;
-      }
-      if (e.key === "Tab" && panelRef.current) {
-        const focusable = panelRef.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-        if (!focusable.length) return;
-        const first = focusable[0], last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
+    let frame = 0;
+    const onMove = (e) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        setCursor({ x: e.clientX, y: e.clientY });
+      });
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
-  useEffect(() => {
-    const onGlobalKey = (e) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (!mod || e.altKey || e.repeat) return;
-      if (e.key.toLowerCase() !== "k") return;
-      e.preventDefault();
-      if (e.shiftKey) {
-        setOpen(true);
-        onMicClick();
-        return;
-      }
-      setOpen(true);
-      setTimeout(() => {
-        var _a;
-        return (_a = inputRef.current) == null ? void 0 : _a.focus();
-      }, 30);
+    document.addEventListener("mousemove", onMove, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("mousemove", onMove, true);
     };
-    document.addEventListener("keydown", onGlobalKey);
-    return () => document.removeEventListener("keydown", onGlobalKey);
-  }, [onMicClick]);
+  }, []);
+  const route = currentRoute || (typeof window !== "undefined" ? window.location.pathname : "/");
   const announce = useCallback((text) => {
     if (liveRef.current) {
       liveRef.current.textContent = "";
-      setTimeout(() => liveRef.current.textContent = text, 30);
+      setTimeout(() => {
+        if (liveRef.current) liveRef.current.textContent = text;
+      }, 30);
     }
     if (speak) speakText(text, speechRef);
   }, [speak]);
-  const route = currentRoute || (typeof window !== "undefined" ? window.location.pathname : "/");
   const highlightStep = useCallback(async (plan, idx) => {
     var _a;
     cleanup();
@@ -1095,70 +1902,6 @@ function GuiderWidget({
       }
     });
   }, [accent, announce]);
-  const ask = useCallback(async (question) => {
-    var _a, _b;
-    if (!(question == null ? void 0 : question.trim())) return;
-    setMessages((m) => [...m, { role: "user", text: question }]);
-    setBusy(true);
-    setSteps(null);
-    setStepIdx(0);
-    cleanup();
-    (_a = abortRef.current) == null ? void 0 : _a.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    try {
-      const screenshotDataUrl = await captureViewport();
-      let plan;
-      if (proxyUrl) {
-        const collected = { steps: [], confidence: "medium", fallbackMessage: null };
-        plan = await streamPlanGuidance({
-          question,
-          currentRoute: route,
-          map,
-          screenshotDataUrl,
-          proxyUrl,
-          signal: ctrl.signal,
-          onStep: (s) => {
-            collected.steps.push(s);
-            if (collected.steps.length === 1 && !agentEnabled) {
-              setSteps({ steps: collected.steps, confidence: "streaming" });
-              highlightStep({ steps: collected.steps }, 0);
-            }
-          }
-        });
-      } else {
-        plan = await planGuidance({
-          question,
-          currentRoute: route,
-          map,
-          screenshotDataUrl,
-          apiKey,
-          model,
-          endpoint,
-          signal: ctrl.signal
-        });
-      }
-      if (plan.confidence === "low" || !((_b = plan.steps) == null ? void 0 : _b.length)) {
-        const t = plan.fallbackMessage || "I'm not confident about where to point you. Could you rephrase?";
-        setMessages((m) => [...m, { role: "assistant", text: t, status: "low-confidence" }]);
-        announce(t);
-      } else {
-        setSteps(plan);
-        const summary = `${plan.steps.length} step${plan.steps.length > 1 ? "s" : ""} \u2014 ${agentEnabled ? "I will execute them now." : "I'll walk you through."}`;
-        setMessages((m) => [...m, { role: "assistant", text: summary, status: plan.confidence }]);
-        announce(summary);
-        if (agentEnabled) await runAgent(plan);
-        else await highlightStep(plan, 0);
-      }
-    } catch (e) {
-      if (e.name === "AbortError") return;
-      const t = `Sorry \u2014 ${String(e.message || e)}`;
-      setMessages((m) => [...m, { role: "assistant", text: t, status: "error" }]);
-      announce(t);
-    } finally {
-      setBusy(false);
-    }
-  }, [apiKey, map, model, endpoint, route, proxyUrl, agentEnabled, highlightStep, announce]);
   const runAgent = useCallback(async (plan) => {
     setAgentRunning(true);
     const ctrl = new AbortController();
@@ -1183,267 +1926,368 @@ function GuiderWidget({
       setMessages((m) => [...m, { role: "assistant", text: "All done.", status: "done" }]);
     }
   }, [announce]);
+  const ask = useCallback(async (question) => {
+    var _a, _b;
+    if (!(question == null ? void 0 : question.trim())) return;
+    setMessages((m) => [...m, { role: "user", text: question }]);
+    setBusy(true);
+    setSteps(null);
+    setStepIdx(0);
+    cleanup();
+    (_a = abortRef.current) == null ? void 0 : _a.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    try {
+      const screenshotDataUrl = await captureViewport();
+      let plan;
+      if (proxyUrl) {
+        plan = await streamPlanGuidance({
+          question,
+          currentRoute: route,
+          map,
+          screenshotDataUrl,
+          proxyUrl,
+          signal: ctrl.signal,
+          onStep: (step) => {
+            setSteps((current) => {
+              const nextSteps = [...(current == null ? void 0 : current.steps) || [], step];
+              if (nextSteps.length === 1 && !agentEnabled) {
+                highlightStep({ steps: nextSteps }, 0);
+              }
+              return { steps: nextSteps, confidence: "streaming" };
+            });
+          }
+        });
+      } else {
+        plan = await planGuidance({
+          question,
+          currentRoute: route,
+          map,
+          screenshotDataUrl,
+          apiKey,
+          model,
+          endpoint,
+          signal: ctrl.signal
+        });
+      }
+      if (plan.confidence === "low" || !((_b = plan.steps) == null ? void 0 : _b.length)) {
+        const message = plan.fallbackMessage || "I'm not confident about where to point you. Could you rephrase?";
+        setMessages((m) => [...m, { role: "assistant", text: message, status: "low-confidence" }]);
+        announce(message);
+        return;
+      }
+      setSteps(plan);
+      const summary = `${plan.steps.length} step${plan.steps.length > 1 ? "s" : ""} ready.`;
+      setMessages((m) => [...m, { role: "assistant", text: summary, status: plan.confidence }]);
+      announce(summary);
+      if (agentEnabled) await runAgent(plan);
+      else await highlightStep(plan, 0);
+    } catch (e) {
+      if ((e == null ? void 0 : e.name) === "AbortError") return;
+      const message = `Sorry \u2014 ${String((e == null ? void 0 : e.message) || e)}`;
+      setMessages((m) => [...m, { role: "assistant", text: message, status: "error" }]);
+      announce(message);
+    } finally {
+      setBusy(false);
+    }
+  }, [agentEnabled, apiKey, announce, endpoint, highlightStep, map, model, proxyUrl, route, runAgent]);
   const onMicClick = useCallback(async () => {
     try {
       if (!recording) {
-        const r = new VoiceRecorder();
-        await r.start();
-        recorderRef.current = r;
+        setOpen(true);
+        const recorder2 = new VoiceRecorder();
+        await recorder2.start();
+        recorderRef.current = recorder2;
         setRecording(true);
+        return;
+      }
+      const recorder = recorderRef.current;
+      recorderRef.current = null;
+      setRecording(false);
+      setBusy(true);
+      const blob = await recorder.stop();
+      const text = whisperUrl ? await transcribeViaProxy(blob, whisperUrl) : await transcribeWithWhisper(blob, apiKey);
+      setBusy(false);
+      if (text) {
+        setInput("");
+        ask(text);
       } else {
-        const r = recorderRef.current;
-        recorderRef.current = null;
-        setRecording(false);
-        setBusy(true);
-        const blob = await r.stop();
-        const text = whisperUrl ? await transcribeViaProxy(blob, whisperUrl) : await transcribeWithWhisper(blob, apiKey);
-        setBusy(false);
-        if (text) {
-          setInput("");
-          ask(text);
-        } else setMessages((m) => [...m, { role: "assistant", text: "I didn't catch that. Try again or type it.", status: "low-confidence" }]);
+        setMessages((m) => [...m, { role: "assistant", text: "I didn't catch that. Try again or type it.", status: "low-confidence" }]);
       }
     } catch (e) {
       setRecording(false);
       setBusy(false);
       setMessages((m) => [...m, { role: "assistant", text: `Voice error: ${e.message}. Type instead.`, status: "error" }]);
     }
-  }, [recording, apiKey, whisperUrl, ask]);
+  }, [recording, whisperUrl, apiKey, ask]);
+  useEffect(() => {
+    const onGlobalKey = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod || e.altKey || e.repeat) return;
+      if (e.key.toLowerCase() !== "k") return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        setOpen(true);
+        onMicClick();
+        return;
+      }
+      setOpen(true);
+      setTimeout(() => {
+        var _a;
+        return (_a = inputRef.current) == null ? void 0 : _a.focus();
+      }, 30);
+    };
+    document.addEventListener("keydown", onGlobalKey);
+    return () => document.removeEventListener("keydown", onGlobalKey);
+  }, [onMicClick]);
   const onSubmit = (e) => {
     e.preventDefault();
-    const q = input.trim();
-    if (!q) return;
+    const question = input.trim();
+    if (!question) return;
     setInput("");
-    ask(q);
+    ask(question);
   };
-  const dockAnchor = getDockAnchor(position);
   const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-  const statusText = busy ? "Thinking\u2026" : agentRunning ? "Moving the guide cursor\u2026" : recording ? "Listening\u2026" : (latestAssistant == null ? void 0 : latestAssistant.text) || "Press Cmd/Ctrl+K to ask. Press Cmd/Ctrl+Shift+K to talk.";
-  return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx(
-      "button",
-      {
-        ref: launcherRef,
-        "data-guider": "guider-launcher",
-        "aria-label": open ? "Close Guider" : "Open Guider assistant",
-        "aria-expanded": open,
-        "aria-controls": "guider-panel",
-        onClick: () => setOpen((v) => !v),
-        style: {
-          position: "fixed",
-          bottom: 20,
-          zIndex: 2147483646,
-          ...dockAnchor,
-          width: 48,
-          height: 48,
-          borderRadius: 18,
-          border: `1px solid ${hexAlpha(accent, 0.16)}`,
-          cursor: "pointer",
-          background: "#ffffff",
-          color: "#111111",
-          boxShadow: `0 16px 40px rgba(15,23,42,.14), 0 0 0 8px ${hexAlpha(accent, 0.08)}`,
-          display: "grid",
-          placeItems: "center",
-          padding: 0,
-          backdropFilter: "blur(18px)"
-        },
-        children: /* @__PURE__ */ jsx("div", { "data-guider": "guider-dock", "aria-hidden": "true", style: { display: "flex", alignItems: "flex-end", gap: 3, height: 16 }, children: [10, 15, 11, 7].map((height, index) => /* @__PURE__ */ jsx(
-          "span",
+  const statusText = busy ? "Thinking\u2026" : agentRunning ? "Guiding you\u2026" : recording ? "Listening\u2026" : (latestAssistant == null ? void 0 : latestAssistant.text) || greeting;
+  const chrome = getCursorChrome(cursor);
+  return /* @__PURE__ */ jsx(Fragment, { children: /* @__PURE__ */ jsxs(
+    "div",
+    {
+      ref: launcherRef,
+      "data-guider": "guider-cursor",
+      style: {
+        position: "fixed",
+        left: chrome.cursorLeft,
+        top: chrome.cursorTop,
+        zIndex: 2147483646,
+        pointerEvents: "none"
+      },
+      children: [
+        /* @__PURE__ */ jsx(
+          "div",
           {
+            "aria-hidden": "true",
             style: {
-              width: 3,
-              height: busy || recording ? height : Math.max(5, height - 4),
+              width: 18,
+              height: 18,
               borderRadius: 999,
-              background: index === 1 ? "#111111" : accent,
-              opacity: index === 1 ? 1 : 0.72,
-              display: "block"
+              border: `1px solid ${hexAlpha(accent, 0.22)}`,
+              background: "rgba(255,255,255,0.96)",
+              boxShadow: `0 10px 24px rgba(15,23,42,.16), 0 0 0 8px ${hexAlpha(accent, 0.06)}`,
+              display: "grid",
+              placeItems: "center",
+              backdropFilter: "blur(18px)"
+            },
+            children: /* @__PURE__ */ jsx(
+              "div",
+              {
+                style: {
+                  width: 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background: accent
+                }
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            type: "button",
+            "data-guider": "guider-launcher",
+            onClick: () => setOpen((value) => !value),
+            "aria-label": open ? "Close Guider assistant" : "Open Guider assistant",
+            "aria-expanded": open,
+            style: {
+              position: "fixed",
+              left: chrome.cursorLeft - 10,
+              top: chrome.cursorTop - 10,
+              width: 38,
+              height: 38,
+              borderRadius: 999,
+              opacity: 0,
+              pointerEvents: "auto",
+              cursor: "pointer"
             }
-          },
-          index
-        )) })
-      }
-    ),
-    open && /* @__PURE__ */ jsxs(
-      "div",
-      {
-        id: "guider-panel",
-        ref: panelRef,
-        "data-guider": "guider-panel",
-        role: "dialog",
-        "aria-modal": "false",
-        "aria-label": "Guider assistant",
-        style: {
-          position: "fixed",
-          bottom: 78,
-          zIndex: 2147483646,
-          ...dockAnchor,
-          width: 360,
-          maxWidth: "calc(100vw - 24px)",
-          display: "grid",
-          gap: 8,
-          fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif'
-        },
-        children: [
-          /* @__PURE__ */ jsx(
-            "div",
-            {
-              role: "status",
-              "aria-live": "polite",
-              style: {
-                justifySelf: "stretch",
-                background: "rgba(255,255,255,0.94)",
-                color: "#111111",
-                border: "1px solid rgba(17,17,17,0.08)",
-                borderRadius: 22,
-                padding: "12px 14px",
-                boxShadow: "0 20px 48px rgba(15,23,42,.12)",
-                backdropFilter: "blur(18px)"
-              },
-              children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
-                /* @__PURE__ */ jsx("div", { "aria-hidden": "true", style: { width: 8, height: 8, borderRadius: "50%", background: accent, flex: "0 0 auto", boxShadow: `0 0 0 6px ${hexAlpha(accent, 0.12)}` } }),
-                /* @__PURE__ */ jsxs("div", { style: { minWidth: 0, flex: 1 }, children: [
-                  /* @__PURE__ */ jsx("div", { style: { fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: "#6b7280", marginBottom: 2 }, children: agentEnabled ? "Auto guide" : "Guide" }),
-                  /* @__PURE__ */ jsx("div", { style: { fontSize: 12.5, lineHeight: 1.45 }, children: statusText })
-                ] }),
-                /* @__PURE__ */ jsx("div", { style: { fontSize: 10, color: "#6b7280", flex: "0 0 auto", letterSpacing: ".12em", textTransform: "uppercase" }, children: map ? "Ready" : "Map" })
-              ] })
-            }
-          ),
-          /* @__PURE__ */ jsx("div", { ref: liveRef, "aria-live": "polite", "aria-atomic": "true", style: { position: "absolute", clip: "rect(0 0 0 0)", clipPath: "inset(50%)", width: 1, height: 1, overflow: "hidden", whiteSpace: "nowrap" } }),
-          /* @__PURE__ */ jsxs(
-            "form",
-            {
-              onSubmit,
-              style: {
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: 8,
-                background: "rgba(255,255,255,0.98)",
-                color: "#111111",
-                border: "1px solid rgba(17,17,17,0.08)",
-                borderRadius: 999,
-                boxShadow: "0 24px 54px rgba(15,23,42,.14)",
-                backdropFilter: "blur(18px)"
-              },
-              children: [
-                agent && /* @__PURE__ */ jsx(
-                  "button",
-                  {
-                    type: "button",
-                    "data-guider": "guider-agent-toggle",
-                    onClick: () => setAgentEnabled((v) => !v),
-                    "aria-pressed": agentEnabled,
-                    title: agentEnabled ? "Agent will execute steps" : "Agent disabled \u2014 guided mode",
-                    style: {
-                      background: agentEnabled ? "#111111" : "transparent",
-                      color: agentEnabled ? "#ffffff" : "#6b7280",
-                      border: "1px solid rgba(17,17,17,0.08)",
-                      borderRadius: 999,
-                      padding: "0 10px",
-                      height: 36,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      letterSpacing: ".12em",
-                      textTransform: "uppercase",
-                      flex: "0 0 auto"
-                    },
-                    children: "auto"
-                  }
-                ),
-                /* @__PURE__ */ jsx(
-                  "button",
-                  {
-                    type: "button",
-                    "data-guider": "guider-mic",
-                    onClick: onMicClick,
-                    "aria-label": recording ? "Stop recording" : "Start voice recording",
-                    "aria-pressed": recording,
-                    style: {
-                      background: recording ? "#111111" : "transparent",
-                      color: recording ? "#ffffff" : "#6b7280",
-                      border: "1px solid rgba(17,17,17,0.08)",
-                      borderRadius: 999,
-                      width: 36,
-                      height: 36,
-                      cursor: "pointer",
-                      fontSize: 13,
-                      flex: "0 0 auto"
-                    },
-                    children: recording ? "Stop" : "Mic"
-                  }
-                ),
-                /* @__PURE__ */ jsx(
-                  "input",
-                  {
-                    ref: inputRef,
-                    "data-guider": "guider-input",
-                    value: input,
-                    onChange: (e) => setInput(e.target.value),
-                    placeholder: recording ? "Recording\u2026" : "Ask where anything lives",
-                    disabled: recording || busy || agentRunning,
-                    "aria-label": "Message Guider",
-                    style: {
-                      flex: 1,
-                      background: "transparent",
-                      color: "#111111",
-                      border: "none",
-                      padding: "0 6px",
-                      outline: "none",
-                      fontSize: 14,
-                      minWidth: 0
+          }
+        ),
+        /* @__PURE__ */ jsx("div", { ref: liveRef, "aria-live": "polite", "aria-atomic": "true", style: { position: "absolute", clip: "rect(0 0 0 0)", clipPath: "inset(50%)", width: 1, height: 1, overflow: "hidden", whiteSpace: "nowrap" } }),
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            role: "status",
+            "aria-live": "polite",
+            style: {
+              position: "fixed",
+              left: chrome.bubbleLeft,
+              top: chrome.bubbleTop,
+              maxWidth: open ? 340 : 240,
+              pointerEvents: open ? "auto" : "none",
+              opacity: open || busy || recording || agentRunning ? 1 : 0.92,
+              transition: "opacity 160ms ease"
+            },
+            children: /* @__PURE__ */ jsxs(
+              "form",
+              {
+                id: "guider-panel",
+                "data-guider": "guider-panel",
+                role: "dialog",
+                "aria-modal": "false",
+                "aria-label": "Guider assistant",
+                onSubmit,
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: open ? 8 : "10px 12px",
+                  minHeight: 52,
+                  background: "rgba(255,255,255,0.98)",
+                  color: "#111111",
+                  border: "1px solid rgba(17,17,17,0.08)",
+                  borderRadius: 999,
+                  boxShadow: "0 24px 54px rgba(15,23,42,.14)",
+                  backdropFilter: "blur(18px)"
+                },
+                children: [
+                  open && agent && /* @__PURE__ */ jsx(
+                    "button",
+                    {
+                      type: "button",
+                      "data-guider": "guider-agent-toggle",
+                      onClick: () => setAgentEnabled((v) => !v),
+                      "aria-pressed": agentEnabled,
+                      title: agentEnabled ? "Agent will execute steps" : "Agent disabled \u2014 guided mode",
+                      style: {
+                        background: agentEnabled ? "#111111" : "transparent",
+                        color: agentEnabled ? "#ffffff" : "#6b7280",
+                        border: "1px solid rgba(17,17,17,0.08)",
+                        borderRadius: 999,
+                        padding: "0 10px",
+                        height: 36,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        letterSpacing: ".12em",
+                        textTransform: "uppercase",
+                        flex: "0 0 auto"
+                      },
+                      children: "auto"
                     }
-                  }
-                ),
-                /* @__PURE__ */ jsx(
-                  "button",
-                  {
-                    type: "submit",
-                    "data-guider": "guider-send",
-                    disabled: !input.trim() || busy || agentRunning,
-                    style: {
-                      background: "#111111",
-                      color: "#ffffff",
-                      border: "none",
-                      borderRadius: 999,
-                      padding: "0 14px",
-                      height: 36,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      opacity: !input.trim() || busy || agentRunning ? 0.5 : 1
-                    },
-                    children: "Ask"
-                  }
-                ),
-                /* @__PURE__ */ jsx(
-                  "button",
-                  {
-                    type: "button",
-                    "data-guider": "guider-close",
-                    onClick: () => setOpen(false),
-                    "aria-label": "Close Guider",
-                    style: {
-                      background: "transparent",
-                      color: "#6b7280",
-                      border: "none",
-                      cursor: "pointer",
-                      width: 28,
-                      height: 28,
-                      borderRadius: "50%",
-                      fontSize: 16,
-                      flex: "0 0 auto"
-                    },
-                    children: "\xD7"
-                  }
-                )
-              ]
-            }
-          )
-        ]
-      }
-    )
-  ] });
+                  ),
+                  open ? /* @__PURE__ */ jsxs(Fragment, { children: [
+                    /* @__PURE__ */ jsx(
+                      "button",
+                      {
+                        type: "button",
+                        "data-guider": "guider-mic",
+                        onClick: onMicClick,
+                        "aria-label": recording ? "Stop recording" : "Start voice recording",
+                        "aria-pressed": recording,
+                        style: {
+                          background: recording ? "#111111" : "transparent",
+                          color: recording ? "#ffffff" : "#6b7280",
+                          border: "1px solid rgba(17,17,17,0.08)",
+                          borderRadius: 999,
+                          width: 36,
+                          height: 36,
+                          cursor: "pointer",
+                          fontSize: 12,
+                          flex: "0 0 auto"
+                        },
+                        children: recording ? "Stop" : "Mic"
+                      }
+                    ),
+                    /* @__PURE__ */ jsx(
+                      "input",
+                      {
+                        ref: inputRef,
+                        "data-guider": "guider-input",
+                        value: input,
+                        onChange: (e) => setInput(e.target.value),
+                        placeholder: recording ? "Recording\u2026" : "Ask where anything lives",
+                        disabled: recording || busy || agentRunning,
+                        "aria-label": "Message Guider",
+                        style: {
+                          flex: 1,
+                          background: "transparent",
+                          color: "#111111",
+                          border: "none",
+                          padding: "0 6px",
+                          outline: "none",
+                          fontSize: 14,
+                          minWidth: 0
+                        }
+                      }
+                    ),
+                    /* @__PURE__ */ jsx(
+                      "button",
+                      {
+                        type: "submit",
+                        "data-guider": "guider-send",
+                        disabled: !input.trim() || busy || agentRunning,
+                        style: {
+                          background: "#111111",
+                          color: "#ffffff",
+                          border: "none",
+                          borderRadius: 999,
+                          padding: "0 14px",
+                          height: 36,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          opacity: !input.trim() || busy || agentRunning ? 0.5 : 1
+                        },
+                        children: "Ask"
+                      }
+                    ),
+                    /* @__PURE__ */ jsx(
+                      "button",
+                      {
+                        type: "button",
+                        "data-guider": "guider-close",
+                        onClick: () => setOpen(false),
+                        "aria-label": "Close Guider",
+                        style: {
+                          background: "transparent",
+                          color: "#6b7280",
+                          border: "none",
+                          cursor: "pointer",
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          fontSize: 16,
+                          flex: "0 0 auto"
+                        },
+                        children: "\xD7"
+                      }
+                    )
+                  ] }) : /* @__PURE__ */ jsx(
+                    "button",
+                    {
+                      type: "button",
+                      onClick: () => setOpen(true),
+                      style: {
+                        border: "none",
+                        background: "transparent",
+                        padding: 0,
+                        margin: 0,
+                        color: "#111111",
+                        fontSize: 12.5,
+                        lineHeight: 1.45,
+                        textAlign: "left",
+                        cursor: "pointer"
+                      },
+                      children: statusText
+                    }
+                  )
+                ]
+              }
+            )
+          }
+        )
+      ]
+    }
+  ) });
 }
 async function transcribeViaProxy(blob, url) {
   const fd = new FormData();
@@ -1461,11 +2305,6 @@ function hexAlpha(hex, alpha) {
   const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
-function getDockAnchor(position) {
-  if (position === "bottom-left") return { left: 20 };
-  if (position === "bottom-right") return { right: 20 };
-  return { left: "50%", transform: "translateX(-50%)" };
-}
 function speakText(text, speechRef) {
   if (typeof window === "undefined" || !("speechSynthesis" in window) || !text) return;
   const cleaned = String(text).replace(/\s+/g, " ").trim();
@@ -1481,6 +2320,18 @@ function speakText(text, speechRef) {
 function stopSpeaking() {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
+}
+function getCursorChrome(cursor) {
+  const width = typeof window === "undefined" ? 1280 : window.innerWidth;
+  const height = typeof window === "undefined" ? 720 : window.innerHeight;
+  const cursorLeft = clamp(cursor.x - 9, 10, width - 28);
+  const cursorTop = clamp(cursor.y - 9, 10, height - 28);
+  const bubbleLeft = clamp(cursor.x + 22, 12, width - 352);
+  const bubbleTop = clamp(cursor.y + 18, 12, height - 84);
+  return { cursorLeft, cursorTop, bubbleLeft, bubbleTop };
+}
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), Math.max(min, max));
 }
 
 // src/widget/context.js
