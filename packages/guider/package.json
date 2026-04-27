@@ -1,0 +1,65 @@
+{
+  "name": "guider",
+  "version": "0.1.0",
+  "description": "AI-powered navigation SDK for Next.js apps. Scans your frontend, builds a semantic site map, and ships a chat/voice widget that points users to the exact element they're looking for.",
+  "type": "module",
+  "bin": {
+    "guider": "./bin/guider.js"
+  },
+  "main": "./dist/widget.cjs",
+  "module": "./dist/widget.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/widget.d.ts",
+      "import": "./dist/widget.mjs",
+      "require": "./dist/widget.cjs"
+    },
+    "./agent": {
+      "import": "./dist/agent.mjs",
+      "require": "./dist/agent.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "src",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test:scan": "node bin/guider.js init --cwd ./examples/sample-next-app --dry-run --no-llm"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "nextjs",
+    "navigation",
+    "ai",
+    "sdk",
+    "widget",
+    "guidance",
+    "onboarding"
+  ],
+  "author": "Guider",
+  "license": "MIT",
+  "peerDependencies": {},
+  "dependencies": {
+    "@babel/parser": "^7.25.0",
+    "@babel/traverse": "^7.25.0",
+    "@babel/types": "^7.25.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "fast-glob": "^3.3.2",
+    "fs-extra": "^11.2.0",
+    "jscodeshift": "^17.0.0",
+    "openai": "^4.67.0",
+    "ora": "^8.1.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "html2canvas": "^1.4.1"
+  }
+}
