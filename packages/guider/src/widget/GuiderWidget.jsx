@@ -30,9 +30,10 @@ export function GuiderWidget({
   model, endpoint, whisperUrl,
   proxyUrl,
   currentRoute,
-  position = 'bottom-right',
-  accent = '#f5d042',
+  position = 'bottom-center',
+  accent = '#3080ff',
   agent = true,
+  speak = true,
   greeting = "Ask me where to find something — e.g. \"How do I invite a teammate?\"",
 }) {
   const [open, setOpen] = useState(false);
@@ -51,6 +52,7 @@ export function GuiderWidget({
   const launcherRef = useRef(null);
   const liveRef = useRef(null);
   const abortRef = useRef(null);
+  const speechRef = useRef(null);
 
   /* --- Map fetch --- */
   useEffect(() => {
@@ -72,6 +74,8 @@ export function GuiderWidget({
 
   useEffect(() => () => { cleanupHighlight(); abortRef.current?.abort(); }, []);
 
+  useEffect(() => () => stopSpeaking(), []);
+
   /* --- Focus management & keyboard --- */
   useEffect(() => {
     if (!open) { launcherRef.current?.focus(); return; }
@@ -90,10 +94,30 @@ export function GuiderWidget({
     return () => document.removeEventListener('keydown', onKey);
   }, [open]);
 
+  useEffect(() => {
+    const onGlobalKey = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod || e.altKey || e.repeat) return;
+      if (e.key.toLowerCase() !== 'k') return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        setOpen(true);
+        onMicClick();
+        return;
+      }
+      setOpen(true);
+      setTimeout(() => inputRef.current?.focus(), 30);
+    };
+
+    document.addEventListener('keydown', onGlobalKey);
+    return () => document.removeEventListener('keydown', onGlobalKey);
+  }, [onMicClick]);
+
   /* --- Live region announcement --- */
   const announce = useCallback((text) => {
     if (liveRef.current) { liveRef.current.textContent = ''; setTimeout(() => liveRef.current.textContent = text, 30); }
-  }, []);
+    if (speak) speakText(text, speechRef);
+  }, [speak]);
 
   const route = currentRoute || (typeof window !== 'undefined' ? window.location.pathname : '/');
 
@@ -109,6 +133,7 @@ export function GuiderWidget({
       announce(msg);
       return;
     }
+    announce([step.title, step.body, step.visualHint ? `Look for ${step.visualHint}.` : ''].filter(Boolean).join(' '));
     await showHighlight({
       element: found.el, title: step.title, body: step.body,
       stepIndex: idx, totalSteps: plan.steps.length, accent,
@@ -236,15 +261,15 @@ export function GuiderWidget({
     setInput(''); ask(q);
   };
 
-  const right = position === 'bottom-right';
+  const dockAnchor = getDockAnchor(position);
   const latestAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
   const statusText = busy
-    ? 'Thinking...'
+    ? 'Thinking…'
     : agentRunning
-      ? 'Agent is moving through the flow.'
+      ? 'Moving the guide cursor…'
       : recording
-        ? 'Listening...'
-        : latestAssistant?.text || greeting;
+        ? 'Listening…'
+        : latestAssistant?.text || 'Press Cmd/Ctrl+K to ask. Press Cmd/Ctrl+Shift+K to talk.';
 
   return (
     <>
@@ -256,17 +281,29 @@ export function GuiderWidget({
         aria-controls="guider-panel"
         onClick={() => setOpen((v) => !v)}
         style={{
-          position: 'fixed', bottom: 20, [right ? 'right' : 'left']: 20, zIndex: 2147483646,
-          width: 20, height: 20, borderRadius: 999, border: `1px solid ${hexAlpha(accent, 0.5)}`,
+          position: 'fixed', bottom: 20, zIndex: 2147483646,
+          ...dockAnchor,
+          width: 48, height: 48, borderRadius: 18, border: `1px solid ${hexAlpha(accent, 0.16)}`,
           cursor: 'pointer', background: '#ffffff', color: '#111111',
-          boxShadow: `0 0 0 6px ${hexAlpha(accent, 0.15)}, 0 14px 28px rgba(0,0,0,.18)`,
-          display: 'grid', placeItems: 'center', padding: 0,
+          boxShadow: `0 16px 40px rgba(15,23,42,.14), 0 0 0 8px ${hexAlpha(accent, 0.08)}`,
+          display: 'grid', placeItems: 'center', padding: 0, backdropFilter: 'blur(18px)',
         }}
       >
-        <span
-          aria-hidden="true"
-          style={{ width: 6, height: 6, borderRadius: '50%', background: accent, display: 'block' }}
-        />
+        <div data-guider="guider-dock" aria-hidden="true" style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 16 }}>
+          {[10, 15, 11, 7].map((height, index) => (
+            <span
+              key={index}
+              style={{
+                width: 3,
+                height: (busy || recording) ? height : Math.max(5, height - 4),
+                borderRadius: 999,
+                background: index === 1 ? '#111111' : accent,
+                opacity: index === 1 ? 1 : 0.72,
+                display: 'block',
+              }}
+            />
+          ))}
+        </div>
       </button>
 
       {open && (
@@ -276,39 +313,39 @@ export function GuiderWidget({
           data-guider="guider-panel"
           role="dialog" aria-modal="false" aria-label="Guider assistant"
           style={{
-            position: 'fixed', bottom: 54, [right ? 'right' : 'left']: 20, zIndex: 2147483646,
-            width: 420, maxWidth: 'calc(100vw - 24px)',
+            position: 'fixed', bottom: 78, zIndex: 2147483646,
+            ...dockAnchor,
+            width: 360, maxWidth: 'calc(100vw - 24px)',
             display: 'grid', gap: 8,
-            fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto',
+            fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
           }}
         >
           <div
             role="status"
             aria-live="polite"
             style={{
-              justifySelf: right ? 'end' : 'start',
-              maxWidth: 'min(420px, calc(100vw - 24px))',
+              justifySelf: 'stretch',
               background: 'rgba(255,255,255,0.94)',
               color: '#111111',
               border: '1px solid rgba(17,17,17,0.08)',
-              borderRadius: 18,
-              padding: '10px 14px',
-              boxShadow: '0 14px 32px rgba(0,0,0,.12)',
+              borderRadius: 22,
+              padding: '12px 14px',
+              boxShadow: '0 20px 48px rgba(15,23,42,.12)',
               backdropFilter: 'blur(18px)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div aria-hidden="true" style={{ width: 7, height: 7, borderRadius: '50%', background: accent, flex: '0 0 auto' }} />
+              <div aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: accent, flex: '0 0 auto', boxShadow: `0 0 0 6px ${hexAlpha(accent, 0.12)}` }} />
               <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: '#6b7280', marginBottom: 2 }}>
-                  {agentEnabled ? 'Agent ready' : 'Guide ready'}
+                <div style={{ fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: '#6b7280', marginBottom: 2 }}>
+                  {agentEnabled ? 'Auto guide' : 'Guide'}
                 </div>
-                <div style={{ fontSize: 12.5, lineHeight: 1.45, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: 12.5, lineHeight: 1.45 }}>
                   {statusText}
                 </div>
               </div>
-              <div style={{ fontSize: 10, color: '#6b7280', flex: '0 0 auto' }}>
-                {map ? `${map.pages?.length || 0} pages` : 'loading'}
+              <div style={{ fontSize: 10, color: '#6b7280', flex: '0 0 auto', letterSpacing: '.12em', textTransform: 'uppercase' }}>
+                {map ? 'Ready' : 'Map'}
               </div>
             </div>
           </div>
@@ -322,7 +359,7 @@ export function GuiderWidget({
               display: 'flex', alignItems: 'center', gap: 8, padding: 8,
               background: 'rgba(255,255,255,0.98)', color: '#111111',
               border: '1px solid rgba(17,17,17,0.08)', borderRadius: 999,
-              boxShadow: '0 18px 40px rgba(0,0,0,.14)',
+              boxShadow: '0 24px 54px rgba(15,23,42,.14)',
               backdropFilter: 'blur(18px)',
             }}
           >
@@ -338,10 +375,10 @@ export function GuiderWidget({
                   color: agentEnabled ? '#ffffff' : '#6b7280',
                   border: '1px solid rgba(17,17,17,0.08)',
                   borderRadius: 999, padding: '0 10px', height: 36,
-                  fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
+                  fontSize: 10, fontWeight: 700, cursor: 'pointer',
                   letterSpacing: '.12em', textTransform: 'uppercase', flex: '0 0 auto',
                 }}
-              >agent</button>
+              >auto</button>
             )}
             <button
               type="button" data-guider="guider-mic"
@@ -357,7 +394,7 @@ export function GuiderWidget({
             <input
               ref={inputRef} data-guider="guider-input"
               value={input} onChange={(e) => setInput(e.target.value)}
-              placeholder={recording ? 'Recording...' : 'Ask where anything lives'}
+              placeholder={recording ? 'Recording…' : 'Ask where anything lives'}
               disabled={recording || busy || agentRunning}
               aria-label="Message Guider"
               style={{
@@ -373,7 +410,7 @@ export function GuiderWidget({
                 borderRadius: 999, padding: '0 14px', height: 36, fontWeight: 700, cursor: 'pointer',
                 opacity: (!input.trim() || busy || agentRunning) ? 0.5 : 1,
               }}
-            >Go</button>
+            >Ask</button>
             <button
               type="button"
               data-guider="guider-close"
@@ -402,9 +439,33 @@ async function transcribeViaProxy(blob, url) {
 
 function hexAlpha(hex, alpha) {
   const m = /^#?([0-9a-f]{3,8})$/i.exec(hex || '');
-  if (!m) return `rgba(245,208,66,${alpha})`;
+  if (!m) return `rgba(48,128,255,${alpha})`;
   let h = m[1];
   if (h.length === 3) h = h.split('').map((c) => c + c).join('');
   const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function getDockAnchor(position) {
+  if (position === 'bottom-left') return { left: 20 };
+  if (position === 'bottom-right') return { right: 20 };
+  return { left: '50%', transform: 'translateX(-50%)' };
+}
+
+function speakText(text, speechRef) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window) || !text) return;
+  const cleaned = String(text).replace(/\s+/g, ' ').trim();
+  if (!cleaned) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(cleaned);
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+  speechRef.current = utterance;
+  window.speechSynthesis.speak(utterance);
+}
+
+function stopSpeaking() {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
 }

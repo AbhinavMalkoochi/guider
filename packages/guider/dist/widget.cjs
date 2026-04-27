@@ -54,17 +54,23 @@ async function captureViewport() {
     height: window.innerHeight,
     windowWidth: document.documentElement.clientWidth,
     windowHeight: document.documentElement.clientHeight,
+    ignoreElements: (element) => shouldIgnoreElement(element),
     onclone: (clonedDoc) => sanitizeClonedDocument(document, clonedDoc)
   };
   let canvas;
   try {
     canvas = await html2canvas(document.body, options);
   } catch {
-    canvas = await html2canvas(document.documentElement, options);
+    try {
+      canvas = await html2canvas(document.documentElement, options);
+    } catch {
+      canvas = createFallbackCanvas();
+    }
   }
   return canvas.toDataURL("image/jpeg", 0.7);
 }
 var UNSUPPORTED_COLOR_FN = /(oklch|oklab|lch|lab|color-mix)\(/i;
+var UNSUPPORTED_COLOR_SPACE = /\sin\s+(oklch|oklab|lch|lab)\b/gi;
 var COLOR_PROPS = [
   "color",
   "backgroundColor",
@@ -80,6 +86,10 @@ var COLOR_PROPS = [
   "boxShadow",
   "textShadow"
 ];
+function shouldIgnoreElement(element) {
+  var _a;
+  return !!((_a = element == null ? void 0 : element.closest) == null ? void 0 : _a.call(element, "[data-guider-panel], [data-guider-launcher], [data-guider-dock], #guider-highlight-root"));
+}
 function sanitizeClonedDocument(sourceDoc, clonedDoc) {
   const sourceRootStyle = getComputedStyle(sourceDoc.documentElement);
   const cloneRootStyle = clonedDoc.documentElement.style;
@@ -89,6 +99,18 @@ function sanitizeClonedDocument(sourceDoc, clonedDoc) {
     if (UNSUPPORTED_COLOR_FN.test(value)) {
       cloneRootStyle.setProperty(name, "#000000");
     }
+  }
+  for (const styleEl of clonedDoc.querySelectorAll("style")) {
+    if (!styleEl.textContent || !UNSUPPORTED_COLOR_FN.test(styleEl.textContent)) continue;
+    styleEl.textContent = sanitizeCssText(styleEl.textContent);
+  }
+  for (const cloneEl of clonedDoc.querySelectorAll("[style]")) {
+    const inlineStyle = cloneEl.getAttribute("style");
+    if (!inlineStyle || !UNSUPPORTED_COLOR_FN.test(inlineStyle)) continue;
+    cloneEl.setAttribute("style", sanitizeCssText(inlineStyle));
+  }
+  for (const widgetEl of clonedDoc.querySelectorAll("[data-guider-panel], [data-guider-launcher], [data-guider-dock], #guider-highlight-root")) {
+    widgetEl.remove();
   }
   const sourceEls = sourceDoc.querySelectorAll("*");
   const cloneEls = clonedDoc.querySelectorAll("*");
@@ -112,6 +134,28 @@ function fallbackColor(prop) {
   if (prop === "backgroundColor") return "transparent";
   if (prop === "fill" || prop === "stroke") return "#000000";
   return "#111111";
+}
+function sanitizeCssText(cssText) {
+  return cssText.replace(/color-mix\([^)]*\)/gi, "rgba(17,17,17,0.12)").replace(/oklch\([^)]*\)/gi, "rgb(17 17 17)").replace(/oklab\([^)]*\)/gi, "rgb(17 17 17)").replace(new RegExp("(?<!-)\\blch\\([^)]*\\)", "gi"), "rgb(17 17 17)").replace(new RegExp("(?<!-)\\blab\\([^)]*\\)", "gi"), "rgb(17 17 17)").replace(UNSUPPORTED_COLOR_SPACE, "");
+}
+function createFallbackCanvas() {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(window.innerWidth));
+  canvas.height = Math.max(1, Math.round(window.innerHeight));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+  const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  gradient.addColorStop(0, "#f7f7f5");
+  gradient.addColorStop(1, "#ffffff");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#111111";
+  ctx.font = "500 20px sans-serif";
+  ctx.fillText("Guider fallback capture", 28, 42);
+  ctx.fillStyle = "rgba(17,17,17,0.55)";
+  ctx.font = "14px sans-serif";
+  ctx.fillText(window.location.pathname || "/", 28, 66);
+  return canvas;
 }
 
 // src/widget/voice.js
@@ -263,6 +307,7 @@ var ROOT_ID = "guider-highlight-root";
 var STYLE_ID = "guider-highlight-style";
 var activeReposition = null;
 var listenersAttached = false;
+var lastPointer = { x: Math.round(window.innerWidth * 0.5), y: Math.round(window.innerHeight - 80) };
 function ensureStyle() {
   if (document.getElementById(STYLE_ID)) return;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -270,49 +315,89 @@ function ensureStyle() {
   style.id = STYLE_ID;
   style.textContent = `
     #${ROOT_ID} { position: fixed; inset: 0; pointer-events: none; z-index: 2147483600; }
-    #${ROOT_ID} .gd-mask {
-      position: fixed; background: rgba(8, 10, 18, .58); pointer-events: auto;
-      ${reduce ? "" : "transition: all .2s ease;"}
+    #${ROOT_ID} .gd-focus {
+      position: fixed;
+      border: 1px solid rgba(31, 41, 55, .18);
+      background: rgba(59, 130, 246, .04);
+      box-shadow: 0 18px 48px rgba(15, 23, 42, .08), 0 0 0 10px rgba(59, 130, 246, .08);
+      border-radius: 16px;
+      ${reduce ? "" : "transition: all .34s cubic-bezier(.2,.8,.2,1);"}
     }
-    #${ROOT_ID} .gd-ring {
-      position: fixed; pointer-events: none; border: 2px solid var(--gd-accent, #f5d042);
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--gd-accent, #f5d042) 25%, transparent),
-                  0 0 32px color-mix(in srgb, var(--gd-accent, #f5d042) 60%, transparent);
-      border-radius: 10px;
-      ${reduce ? "" : "transition: all .25s cubic-bezier(.2,.8,.2,1); animation: gd-pulse 1.6s ease-in-out infinite;"}
+    #${ROOT_ID} .gd-pointer {
+      position: fixed;
+      width: 24px;
+      height: 24px;
+      transform-origin: 7px 7px;
+      ${reduce ? "" : "transition: left .42s cubic-bezier(.2,.8,.2,1), top .42s cubic-bezier(.2,.8,.2,1);"}
     }
-    @keyframes gd-pulse {
-      0%,100% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--gd-accent,#f5d042) 25%, transparent),
-                            0 0 24px color-mix(in srgb, var(--gd-accent,#f5d042) 55%, transparent); }
-      50%     { box-shadow: 0 0 0 8px color-mix(in srgb, var(--gd-accent,#f5d042) 10%, transparent),
-                            0 0 40px color-mix(in srgb, var(--gd-accent,#f5d042) 85%, transparent); }
+    #${ROOT_ID} .gd-pointer::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      clip-path: polygon(0 0, 68% 58%, 43% 63%, 57% 100%, 43% 100%, 31% 66%, 0 0);
+      background: var(--gd-accent, #3b82f6);
+      filter: drop-shadow(0 10px 18px rgba(59, 130, 246, .28));
+    }
+    #${ROOT_ID} .gd-pointer::after {
+      content: '';
+      position: absolute;
+      left: -6px;
+      top: -6px;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(59, 130, 246, .22);
+      background: rgba(59, 130, 246, .08);
     }
     #${ROOT_ID} .gd-tip {
-      position: fixed; max-width: 320px; padding: 12px 14px;
-      background: #0e1118; color: #f3f4f6; border: 1px solid var(--gd-accent, #f5d042);
-      border-radius: 12px;
-      font: 500 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto;
-      box-shadow: 0 18px 48px rgba(0,0,0,.55);
+      position: fixed;
+      max-width: 280px;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, .96);
+      color: #111827;
+      border: 1px solid rgba(15, 23, 42, .08);
+      border-radius: 18px;
+      font: 500 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      box-shadow: 0 22px 44px rgba(15, 23, 42, .14);
+      backdrop-filter: blur(18px);
       pointer-events: auto;
     }
-    #${ROOT_ID} .gd-tip:focus-within { outline: 2px solid var(--gd-accent, #f5d042); outline-offset: 2px; }
+    #${ROOT_ID} .gd-tip:focus-within { outline: 2px solid rgba(59, 130, 246, .34); outline-offset: 2px; }
     #${ROOT_ID} .gd-tip .gd-step {
-      color: var(--gd-accent, #f5d042); font-size: 11px; letter-spacing: .14em;
-      text-transform: uppercase; margin-bottom: 4px;
+      color: rgba(17, 24, 39, .5);
+      font-size: 10px;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
     }
     #${ROOT_ID} .gd-tip .gd-title { font-weight: 700; margin-bottom: 4px; }
-    #${ROOT_ID} .gd-tip .gd-actions { margin-top: 12px; display: flex; gap: 8px; justify-content: flex-end; }
+    #${ROOT_ID} .gd-tip .gd-body { color: rgba(17, 24, 39, .72); }
+    #${ROOT_ID} .gd-tip .gd-actions { margin-top: 12px; display: flex; gap: 8px; justify-content: flex-start; }
     #${ROOT_ID} .gd-tip button {
-      background: var(--gd-accent, #f5d042); color: #0e1118; border: 0;
-      padding: 7px 12px; border-radius: 7px; font: 600 12px ui-sans-serif, system-ui;
+      background: #111827;
+      color: #fff;
+      border: 0;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font: 600 12px ui-sans-serif, system-ui;
       cursor: pointer;
     }
-    #${ROOT_ID} .gd-tip button.gd-secondary { background: transparent; color: #f3f4f6; border: 1px solid #2a2f3a; }
-    #${ROOT_ID} .gd-tip button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-    #${ROOT_ID} .gd-arrow { position: fixed; width: 0; height: 0; border-style: solid; filter: drop-shadow(0 4px 8px rgba(0,0,0,.5)); }
+    #${ROOT_ID} .gd-tip button.gd-secondary {
+      background: transparent;
+      color: rgba(17, 24, 39, .65);
+      border: 1px solid rgba(15, 23, 42, .08);
+    }
+    #${ROOT_ID} .gd-tip button:focus-visible { outline: 2px solid rgba(59, 130, 246, .34); outline-offset: 2px; }
+    #${ROOT_ID} .gd-line {
+      position: fixed;
+      height: 1px;
+      transform-origin: 0 50%;
+      background: linear-gradient(90deg, rgba(59,130,246,.72), rgba(59,130,246,0));
+      ${reduce ? "" : "transition: left .34s cubic-bezier(.2,.8,.2,1), top .34s cubic-bezier(.2,.8,.2,1), width .34s cubic-bezier(.2,.8,.2,1), transform .34s cubic-bezier(.2,.8,.2,1);"}
+    }
     @media (prefers-contrast: more) {
-      #${ROOT_ID} .gd-mask { background: rgba(0,0,0,.85); }
-      #${ROOT_ID} .gd-tip { background: #000; color: #fff; border-color: #fff; }
+      #${ROOT_ID} .gd-focus { box-shadow: 0 0 0 4px rgba(255,255,255,.4); }
+      #${ROOT_ID} .gd-tip { background: #fff; color: #000; border-color: #000; }
     }
   `;
   document.head.appendChild(style);
@@ -335,6 +420,7 @@ function cleanup() {
   if (listenersAttached) {
     window.removeEventListener("resize", onReposition, true);
     window.removeEventListener("scroll", onReposition, true);
+    document.removeEventListener("mousemove", onMouseMove, true);
     document.removeEventListener("keydown", onKeydown, true);
     listenersAttached = false;
   }
@@ -344,6 +430,9 @@ function cleanup() {
 var activeKeyHandlers = null;
 function onReposition() {
   activeReposition == null ? void 0 : activeReposition();
+}
+function onMouseMove(e) {
+  lastPointer = { x: e.clientX, y: e.clientY };
 }
 function onKeydown(e) {
   var _a, _b, _c, _d;
@@ -364,18 +453,15 @@ async function show({ element, title, body, stepIndex, totalSteps, accent, onNex
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   element.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center", inline: "center" });
   await new Promise((r) => setTimeout(r, reduce ? 0 : 250));
-  const masks = Array.from({ length: 4 }, () => {
-    const d = document.createElement("div");
-    d.className = "gd-mask";
-    root.appendChild(d);
-    return d;
-  });
-  const ring = document.createElement("div");
-  ring.className = "gd-ring";
-  root.appendChild(ring);
-  const arrow = document.createElement("div");
-  arrow.className = "gd-arrow";
-  root.appendChild(arrow);
+  const focus = document.createElement("div");
+  focus.className = "gd-focus";
+  root.appendChild(focus);
+  const pointer = document.createElement("div");
+  pointer.className = "gd-pointer";
+  root.appendChild(pointer);
+  const line = document.createElement("div");
+  line.className = "gd-line";
+  root.appendChild(line);
   const tip = document.createElement("div");
   tip.className = "gd-tip";
   tip.setAttribute("role", "dialog");
@@ -401,14 +487,11 @@ async function show({ element, title, body, stepIndex, totalSteps, accent, onNex
   }, 60);
   const reposition = () => {
     const r = element.getBoundingClientRect();
-    const pad = 6;
+    const pad = 10;
     const W = innerWidth, H = innerHeight;
-    masks[0].style.cssText = `top:0;left:0;width:${W}px;height:${Math.max(0, r.top - pad)}px;`;
-    masks[1].style.cssText = `top:${r.bottom + pad}px;left:0;width:${W}px;height:${Math.max(0, H - r.bottom - pad)}px;`;
-    masks[2].style.cssText = `top:${Math.max(0, r.top - pad)}px;left:0;width:${Math.max(0, r.left - pad)}px;height:${Math.max(0, r.height + 2 * pad)}px;`;
-    masks[3].style.cssText = `top:${Math.max(0, r.top - pad)}px;left:${r.right + pad}px;width:${Math.max(0, W - r.right - pad)}px;height:${Math.max(0, r.height + 2 * pad)}px;`;
-    ring.style.cssText = `top:${r.top - pad}px;left:${r.left - pad}px;width:${r.width + 2 * pad}px;height:${r.height + 2 * pad}px;`;
-    const tipW = 320, tipH = tip.offsetHeight || 110;
+    focus.style.cssText = `top:${r.top - pad}px;left:${r.left - pad}px;width:${r.width + 2 * pad}px;height:${r.height + 2 * pad}px;`;
+    const tipW = Math.min(280, W - 24);
+    const tipH = tip.offsetHeight || 110;
     let tx, ty, side;
     if (r.right + tipW + 24 < W) {
       tx = r.right + 18;
@@ -425,13 +508,23 @@ async function show({ element, title, body, stepIndex, totalSteps, accent, onNex
     }
     tip.style.left = `${tx}px`;
     tip.style.top = `${ty}px`;
-    const ax = side === "left" ? r.right + 4 : r.left + r.width / 2 - 8;
-    const ay = side === "top" ? r.bottom + 4 : side === "bottom" ? r.top - 12 : r.top + r.height / 2 - 8;
-    arrow.style.left = `${ax}px`;
-    arrow.style.top = `${ay}px`;
-    const c = getComputedStyle(root).getPropertyValue("--gd-accent") || "#f5d042";
-    arrow.style.borderWidth = side === "left" ? "8px 14px 8px 0" : side === "top" ? "0 8px 14px 8px" : side === "bottom" ? "14px 8px 0 8px" : "8px 0 8px 14px";
-    arrow.style.borderColor = side === "left" ? `transparent ${c} transparent transparent` : side === "top" ? `transparent transparent ${c} transparent` : side === "bottom" ? `${c} transparent transparent transparent` : `transparent transparent transparent ${c}`;
+    const targetX = r.left + Math.min(r.width * 0.45, 22);
+    const targetY = r.top + Math.min(r.height * 0.5, 22);
+    pointer.style.left = `${targetX}px`;
+    pointer.style.top = `${targetY}px`;
+    const startX = lastPointer.x;
+    const startY = lastPointer.y;
+    const endX = tx + (side === "left" ? 0 : tipW * 0.5);
+    const endY = ty + (side === "top" ? 0 : tipH * 0.5);
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const length = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    line.style.left = `${startX}px`;
+    line.style.top = `${startY}px`;
+    line.style.width = `${length}px`;
+    line.style.transform = `rotate(${angle}deg)`;
+    lastPointer = { x: targetX, y: targetY };
   };
   reposition();
   activeReposition = reposition;
@@ -439,6 +532,7 @@ async function show({ element, title, body, stepIndex, totalSteps, accent, onNex
   if (!listenersAttached) {
     window.addEventListener("resize", onReposition, true);
     window.addEventListener("scroll", onReposition, true);
+    document.addEventListener("mousemove", onMouseMove, true);
     document.addEventListener("keydown", onKeydown, true);
     listenersAttached = true;
   }
@@ -881,12 +975,12 @@ function GuiderWidget({
   whisperUrl,
   proxyUrl,
   currentRoute,
-  position = "bottom-right",
-  accent = "#f5d042",
+  position = "bottom-center",
+  accent = "#3080ff",
   agent = true,
+  speak = true,
   greeting = 'Ask me where to find something \u2014 e.g. "How do I invite a teammate?"'
 }) {
-  var _a;
   const [open, setOpen] = (0, import_react.useState)(false);
   const [map, setMap] = (0, import_react.useState)(mapProp || null);
   const [messages, setMessages] = (0, import_react.useState)([]);
@@ -903,6 +997,7 @@ function GuiderWidget({
   const launcherRef = (0, import_react.useRef)(null);
   const liveRef = (0, import_react.useRef)(null);
   const abortRef = (0, import_react.useRef)(null);
+  const speechRef = (0, import_react.useRef)(null);
   (0, import_react.useEffect)(() => {
     if (mapProp) {
       setMap(mapProp);
@@ -919,28 +1014,29 @@ function GuiderWidget({
     };
   }, [mapUrl, mapProp]);
   (0, import_react.useEffect)(() => {
-    var _a2;
+    var _a;
     if (!open) {
       cleanup();
       setSteps(null);
       setStepIdx(0);
-      (_a2 = abortRef.current) == null ? void 0 : _a2.abort();
+      (_a = abortRef.current) == null ? void 0 : _a.abort();
     }
   }, [open]);
   (0, import_react.useEffect)(() => () => {
-    var _a2;
+    var _a;
     cleanup();
-    (_a2 = abortRef.current) == null ? void 0 : _a2.abort();
+    (_a = abortRef.current) == null ? void 0 : _a.abort();
   }, []);
+  (0, import_react.useEffect)(() => () => stopSpeaking(), []);
   (0, import_react.useEffect)(() => {
-    var _a2;
+    var _a;
     if (!open) {
-      (_a2 = launcherRef.current) == null ? void 0 : _a2.focus();
+      (_a = launcherRef.current) == null ? void 0 : _a.focus();
       return;
     }
     setTimeout(() => {
-      var _a3;
-      return (_a3 = inputRef.current) == null ? void 0 : _a3.focus();
+      var _a2;
+      return (_a2 = inputRef.current) == null ? void 0 : _a2.focus();
     }, 30);
     const onKey = (e) => {
       if (e.key === "Escape") {
@@ -963,17 +1059,38 @@ function GuiderWidget({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
+  (0, import_react.useEffect)(() => {
+    const onGlobalKey = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod || e.altKey || e.repeat) return;
+      if (e.key.toLowerCase() !== "k") return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        setOpen(true);
+        onMicClick();
+        return;
+      }
+      setOpen(true);
+      setTimeout(() => {
+        var _a;
+        return (_a = inputRef.current) == null ? void 0 : _a.focus();
+      }, 30);
+    };
+    document.addEventListener("keydown", onGlobalKey);
+    return () => document.removeEventListener("keydown", onGlobalKey);
+  }, [onMicClick]);
   const announce = (0, import_react.useCallback)((text) => {
     if (liveRef.current) {
       liveRef.current.textContent = "";
       setTimeout(() => liveRef.current.textContent = text, 30);
     }
-  }, []);
+    if (speak) speakText(text, speechRef);
+  }, [speak]);
   const route = currentRoute || (typeof window !== "undefined" ? window.location.pathname : "/");
   const highlightStep = (0, import_react.useCallback)(async (plan, idx) => {
-    var _a2;
+    var _a;
     cleanup();
-    if (!((_a2 = plan == null ? void 0 : plan.steps) == null ? void 0 : _a2[idx])) return;
+    if (!((_a = plan == null ? void 0 : plan.steps) == null ? void 0 : _a[idx])) return;
     const step = plan.steps[idx];
     const found = findElement(step.selectors);
     if (!found) {
@@ -982,6 +1099,7 @@ function GuiderWidget({
       announce(msg);
       return;
     }
+    announce([step.title, step.body, step.visualHint ? `Look for ${step.visualHint}.` : ""].filter(Boolean).join(" "));
     await show({
       element: found.el,
       title: step.title,
@@ -1010,14 +1128,14 @@ function GuiderWidget({
     });
   }, [accent, announce]);
   const ask = (0, import_react.useCallback)(async (question) => {
-    var _a2, _b;
+    var _a, _b;
     if (!(question == null ? void 0 : question.trim())) return;
     setMessages((m) => [...m, { role: "user", text: question }]);
     setBusy(true);
     setSteps(null);
     setStepIdx(0);
     cleanup();
-    (_a2 = abortRef.current) == null ? void 0 : _a2.abort();
+    (_a = abortRef.current) == null ? void 0 : _a.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     try {
@@ -1130,9 +1248,9 @@ function GuiderWidget({
     setInput("");
     ask(q);
   };
-  const right = position === "bottom-right";
+  const dockAnchor = getDockAnchor(position);
   const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-  const statusText = busy ? "Thinking..." : agentRunning ? "Agent is moving through the flow." : recording ? "Listening..." : (latestAssistant == null ? void 0 : latestAssistant.text) || greeting;
+  const statusText = busy ? "Thinking\u2026" : agentRunning ? "Moving the guide cursor\u2026" : recording ? "Listening\u2026" : (latestAssistant == null ? void 0 : latestAssistant.text) || "Press Cmd/Ctrl+K to ask. Press Cmd/Ctrl+Shift+K to talk.";
   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
     /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
       "button",
@@ -1146,27 +1264,35 @@ function GuiderWidget({
         style: {
           position: "fixed",
           bottom: 20,
-          [right ? "right" : "left"]: 20,
           zIndex: 2147483646,
-          width: 20,
-          height: 20,
-          borderRadius: 999,
-          border: `1px solid ${hexAlpha(accent, 0.5)}`,
+          ...dockAnchor,
+          width: 48,
+          height: 48,
+          borderRadius: 18,
+          border: `1px solid ${hexAlpha(accent, 0.16)}`,
           cursor: "pointer",
           background: "#ffffff",
           color: "#111111",
-          boxShadow: `0 0 0 6px ${hexAlpha(accent, 0.15)}, 0 14px 28px rgba(0,0,0,.18)`,
+          boxShadow: `0 16px 40px rgba(15,23,42,.14), 0 0 0 8px ${hexAlpha(accent, 0.08)}`,
           display: "grid",
           placeItems: "center",
-          padding: 0
+          padding: 0,
+          backdropFilter: "blur(18px)"
         },
-        children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { "data-guider": "guider-dock", "aria-hidden": "true", style: { display: "flex", alignItems: "flex-end", gap: 3, height: 16 }, children: [10, 15, 11, 7].map((height, index) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
           "span",
           {
-            "aria-hidden": "true",
-            style: { width: 6, height: 6, borderRadius: "50%", background: accent, display: "block" }
-          }
-        )
+            style: {
+              width: 3,
+              height: busy || recording ? height : Math.max(5, height - 4),
+              borderRadius: 999,
+              background: index === 1 ? "#111111" : accent,
+              opacity: index === 1 ? 1 : 0.72,
+              display: "block"
+            }
+          },
+          index
+        )) })
       }
     ),
     open && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
@@ -1180,14 +1306,14 @@ function GuiderWidget({
         "aria-label": "Guider assistant",
         style: {
           position: "fixed",
-          bottom: 54,
-          [right ? "right" : "left"]: 20,
+          bottom: 78,
           zIndex: 2147483646,
-          width: 420,
+          ...dockAnchor,
+          width: 360,
           maxWidth: "calc(100vw - 24px)",
           display: "grid",
           gap: 8,
-          fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto'
+          fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif'
         },
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
@@ -1196,23 +1322,22 @@ function GuiderWidget({
               role: "status",
               "aria-live": "polite",
               style: {
-                justifySelf: right ? "end" : "start",
-                maxWidth: "min(420px, calc(100vw - 24px))",
+                justifySelf: "stretch",
                 background: "rgba(255,255,255,0.94)",
                 color: "#111111",
                 border: "1px solid rgba(17,17,17,0.08)",
-                borderRadius: 18,
-                padding: "10px 14px",
-                boxShadow: "0 14px 32px rgba(0,0,0,.12)",
+                borderRadius: 22,
+                padding: "12px 14px",
+                boxShadow: "0 20px 48px rgba(15,23,42,.12)",
                 backdropFilter: "blur(18px)"
               },
               children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { "aria-hidden": "true", style: { width: 7, height: 7, borderRadius: "50%", background: accent, flex: "0 0 auto" } }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { "aria-hidden": "true", style: { width: 8, height: 8, borderRadius: "50%", background: accent, flex: "0 0 auto", boxShadow: `0 0 0 6px ${hexAlpha(accent, 0.12)}` } }),
                 /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { minWidth: 0, flex: 1 }, children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: 10, letterSpacing: ".14em", textTransform: "uppercase", color: "#6b7280", marginBottom: 2 }, children: agentEnabled ? "Agent ready" : "Guide ready" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: 12.5, lineHeight: 1.45, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: statusText })
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: "#6b7280", marginBottom: 2 }, children: agentEnabled ? "Auto guide" : "Guide" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: 12.5, lineHeight: 1.45 }, children: statusText })
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: 10, color: "#6b7280", flex: "0 0 auto" }, children: map ? `${((_a = map.pages) == null ? void 0 : _a.length) || 0} pages` : "loading" })
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontSize: 10, color: "#6b7280", flex: "0 0 auto", letterSpacing: ".12em", textTransform: "uppercase" }, children: map ? "Ready" : "Map" })
               ] })
             }
           ),
@@ -1230,7 +1355,7 @@ function GuiderWidget({
                 color: "#111111",
                 border: "1px solid rgba(17,17,17,0.08)",
                 borderRadius: 999,
-                boxShadow: "0 18px 40px rgba(0,0,0,.14)",
+                boxShadow: "0 24px 54px rgba(15,23,42,.14)",
                 backdropFilter: "blur(18px)"
               },
               children: [
@@ -1249,14 +1374,14 @@ function GuiderWidget({
                       borderRadius: 999,
                       padding: "0 10px",
                       height: 36,
-                      fontSize: 10.5,
+                      fontSize: 10,
                       fontWeight: 700,
                       cursor: "pointer",
                       letterSpacing: ".12em",
                       textTransform: "uppercase",
                       flex: "0 0 auto"
                     },
-                    children: "agent"
+                    children: "auto"
                   }
                 ),
                 /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
@@ -1288,7 +1413,7 @@ function GuiderWidget({
                     "data-guider": "guider-input",
                     value: input,
                     onChange: (e) => setInput(e.target.value),
-                    placeholder: recording ? "Recording..." : "Ask where anything lives",
+                    placeholder: recording ? "Recording\u2026" : "Ask where anything lives",
                     disabled: recording || busy || agentRunning,
                     "aria-label": "Message Guider",
                     style: {
@@ -1320,7 +1445,7 @@ function GuiderWidget({
                       cursor: "pointer",
                       opacity: !input.trim() || busy || agentRunning ? 0.5 : 1
                     },
-                    children: "Go"
+                    children: "Ask"
                   }
                 ),
                 /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
@@ -1362,11 +1487,32 @@ async function transcribeViaProxy(blob, url) {
 }
 function hexAlpha(hex, alpha) {
   const m = /^#?([0-9a-f]{3,8})$/i.exec(hex || "");
-  if (!m) return `rgba(245,208,66,${alpha})`;
+  if (!m) return `rgba(48,128,255,${alpha})`;
   let h = m[1];
   if (h.length === 3) h = h.split("").map((c) => c + c).join("");
   const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+function getDockAnchor(position) {
+  if (position === "bottom-left") return { left: 20 };
+  if (position === "bottom-right") return { right: 20 };
+  return { left: "50%", transform: "translateX(-50%)" };
+}
+function speakText(text, speechRef) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window) || !text) return;
+  const cleaned = String(text).replace(/\s+/g, " ").trim();
+  if (!cleaned) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(cleaned);
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+  speechRef.current = utterance;
+  window.speechSynthesis.speak(utterance);
+}
+function stopSpeaking() {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
 }
 
 // src/widget/context.js

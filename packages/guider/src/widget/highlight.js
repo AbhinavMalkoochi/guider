@@ -13,6 +13,7 @@ const STYLE_ID = 'guider-highlight-style';
 
 let activeReposition = null;
 let listenersAttached = false;
+let lastPointer = { x: Math.round(window.innerWidth * 0.5), y: Math.round(window.innerHeight - 80) };
 
 function ensureStyle() {
   if (document.getElementById(STYLE_ID)) return;
@@ -21,51 +22,89 @@ function ensureStyle() {
   style.id = STYLE_ID;
   style.textContent = `
     #${ROOT_ID} { position: fixed; inset: 0; pointer-events: none; z-index: 2147483600; }
-    #${ROOT_ID} .gd-mask {
-      position: fixed; background: rgba(8, 10, 18, .58); pointer-events: auto;
-      ${reduce ? '' : 'transition: all .2s ease;'}
+    #${ROOT_ID} .gd-focus {
+      position: fixed;
+      border: 1px solid rgba(31, 41, 55, .18);
+      background: rgba(59, 130, 246, .04);
+      box-shadow: 0 18px 48px rgba(15, 23, 42, .08), 0 0 0 10px rgba(59, 130, 246, .08);
+      border-radius: 16px;
+      ${reduce ? '' : 'transition: all .34s cubic-bezier(.2,.8,.2,1);'}
     }
-    #${ROOT_ID} .gd-ring {
-      position: fixed; pointer-events: none; border: 2px solid var(--gd-accent, #f5d042);
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--gd-accent, #f5d042) 25%, transparent),
-                  0 0 32px color-mix(in srgb, var(--gd-accent, #f5d042) 60%, transparent);
-      border-radius: 10px;
-      ${reduce
-        ? ''
-        : 'transition: all .25s cubic-bezier(.2,.8,.2,1); animation: gd-pulse 1.6s ease-in-out infinite;'}
+    #${ROOT_ID} .gd-pointer {
+      position: fixed;
+      width: 24px;
+      height: 24px;
+      transform-origin: 7px 7px;
+      ${reduce ? '' : 'transition: left .42s cubic-bezier(.2,.8,.2,1), top .42s cubic-bezier(.2,.8,.2,1);'}
     }
-    @keyframes gd-pulse {
-      0%,100% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--gd-accent,#f5d042) 25%, transparent),
-                            0 0 24px color-mix(in srgb, var(--gd-accent,#f5d042) 55%, transparent); }
-      50%     { box-shadow: 0 0 0 8px color-mix(in srgb, var(--gd-accent,#f5d042) 10%, transparent),
-                            0 0 40px color-mix(in srgb, var(--gd-accent,#f5d042) 85%, transparent); }
+    #${ROOT_ID} .gd-pointer::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      clip-path: polygon(0 0, 68% 58%, 43% 63%, 57% 100%, 43% 100%, 31% 66%, 0 0);
+      background: var(--gd-accent, #3b82f6);
+      filter: drop-shadow(0 10px 18px rgba(59, 130, 246, .28));
+    }
+    #${ROOT_ID} .gd-pointer::after {
+      content: '';
+      position: absolute;
+      left: -6px;
+      top: -6px;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(59, 130, 246, .22);
+      background: rgba(59, 130, 246, .08);
     }
     #${ROOT_ID} .gd-tip {
-      position: fixed; max-width: 320px; padding: 12px 14px;
-      background: #0e1118; color: #f3f4f6; border: 1px solid var(--gd-accent, #f5d042);
-      border-radius: 12px;
-      font: 500 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto;
-      box-shadow: 0 18px 48px rgba(0,0,0,.55);
+      position: fixed;
+      max-width: 280px;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, .96);
+      color: #111827;
+      border: 1px solid rgba(15, 23, 42, .08);
+      border-radius: 18px;
+      font: 500 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      box-shadow: 0 22px 44px rgba(15, 23, 42, .14);
+      backdrop-filter: blur(18px);
       pointer-events: auto;
     }
-    #${ROOT_ID} .gd-tip:focus-within { outline: 2px solid var(--gd-accent, #f5d042); outline-offset: 2px; }
+    #${ROOT_ID} .gd-tip:focus-within { outline: 2px solid rgba(59, 130, 246, .34); outline-offset: 2px; }
     #${ROOT_ID} .gd-tip .gd-step {
-      color: var(--gd-accent, #f5d042); font-size: 11px; letter-spacing: .14em;
-      text-transform: uppercase; margin-bottom: 4px;
+      color: rgba(17, 24, 39, .5);
+      font-size: 10px;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
     }
     #${ROOT_ID} .gd-tip .gd-title { font-weight: 700; margin-bottom: 4px; }
-    #${ROOT_ID} .gd-tip .gd-actions { margin-top: 12px; display: flex; gap: 8px; justify-content: flex-end; }
+    #${ROOT_ID} .gd-tip .gd-body { color: rgba(17, 24, 39, .72); }
+    #${ROOT_ID} .gd-tip .gd-actions { margin-top: 12px; display: flex; gap: 8px; justify-content: flex-start; }
     #${ROOT_ID} .gd-tip button {
-      background: var(--gd-accent, #f5d042); color: #0e1118; border: 0;
-      padding: 7px 12px; border-radius: 7px; font: 600 12px ui-sans-serif, system-ui;
+      background: #111827;
+      color: #fff;
+      border: 0;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font: 600 12px ui-sans-serif, system-ui;
       cursor: pointer;
     }
-    #${ROOT_ID} .gd-tip button.gd-secondary { background: transparent; color: #f3f4f6; border: 1px solid #2a2f3a; }
-    #${ROOT_ID} .gd-tip button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-    #${ROOT_ID} .gd-arrow { position: fixed; width: 0; height: 0; border-style: solid; filter: drop-shadow(0 4px 8px rgba(0,0,0,.5)); }
+    #${ROOT_ID} .gd-tip button.gd-secondary {
+      background: transparent;
+      color: rgba(17, 24, 39, .65);
+      border: 1px solid rgba(15, 23, 42, .08);
+    }
+    #${ROOT_ID} .gd-tip button:focus-visible { outline: 2px solid rgba(59, 130, 246, .34); outline-offset: 2px; }
+    #${ROOT_ID} .gd-line {
+      position: fixed;
+      height: 1px;
+      transform-origin: 0 50%;
+      background: linear-gradient(90deg, rgba(59,130,246,.72), rgba(59,130,246,0));
+      ${reduce ? '' : 'transition: left .34s cubic-bezier(.2,.8,.2,1), top .34s cubic-bezier(.2,.8,.2,1), width .34s cubic-bezier(.2,.8,.2,1), transform .34s cubic-bezier(.2,.8,.2,1);'}
+    }
     @media (prefers-contrast: more) {
-      #${ROOT_ID} .gd-mask { background: rgba(0,0,0,.85); }
-      #${ROOT_ID} .gd-tip { background: #000; color: #fff; border-color: #fff; }
+      #${ROOT_ID} .gd-focus { box-shadow: 0 0 0 4px rgba(255,255,255,.4); }
+      #${ROOT_ID} .gd-tip { background: #fff; color: #000; border-color: #000; }
     }
   `;
   document.head.appendChild(style);
@@ -89,6 +128,7 @@ export function cleanup() {
   if (listenersAttached) {
     window.removeEventListener('resize', onReposition, true);
     window.removeEventListener('scroll', onReposition, true);
+    document.removeEventListener('mousemove', onMouseMove, true);
     document.removeEventListener('keydown', onKeydown, true);
     listenersAttached = false;
   }
@@ -98,6 +138,7 @@ export function cleanup() {
 
 let activeKeyHandlers = null;
 function onReposition() { activeReposition?.(); }
+function onMouseMove(e) { lastPointer = { x: e.clientX, y: e.clientY }; }
 function onKeydown(e) {
   if (!activeKeyHandlers) return;
   if (e.key === 'Escape') { e.preventDefault(); activeKeyHandlers.skip?.(); }
@@ -116,11 +157,9 @@ export async function show({ element, title, body, stepIndex, totalSteps, accent
   element.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center', inline: 'center' });
   await new Promise((r) => setTimeout(r, reduce ? 0 : 250));
 
-  const masks = Array.from({ length: 4 }, () => {
-    const d = document.createElement('div'); d.className = 'gd-mask'; root.appendChild(d); return d;
-  });
-  const ring = document.createElement('div'); ring.className = 'gd-ring'; root.appendChild(ring);
-  const arrow = document.createElement('div'); arrow.className = 'gd-arrow'; root.appendChild(arrow);
+  const focus = document.createElement('div'); focus.className = 'gd-focus'; root.appendChild(focus);
+  const pointer = document.createElement('div'); pointer.className = 'gd-pointer'; root.appendChild(pointer);
+  const line = document.createElement('div'); line.className = 'gd-line'; root.appendChild(line);
 
   const tip = document.createElement('div');
   tip.className = 'gd-tip';
@@ -148,34 +187,37 @@ export async function show({ element, title, body, stepIndex, totalSteps, accent
 
   const reposition = () => {
     const r = element.getBoundingClientRect();
-    const pad = 6;
+    const pad = 10;
     const W = innerWidth, H = innerHeight;
-    masks[0].style.cssText = `top:0;left:0;width:${W}px;height:${Math.max(0, r.top - pad)}px;`;
-    masks[1].style.cssText = `top:${r.bottom + pad}px;left:0;width:${W}px;height:${Math.max(0, H - r.bottom - pad)}px;`;
-    masks[2].style.cssText = `top:${Math.max(0, r.top - pad)}px;left:0;width:${Math.max(0, r.left - pad)}px;height:${Math.max(0, r.height + 2 * pad)}px;`;
-    masks[3].style.cssText = `top:${Math.max(0, r.top - pad)}px;left:${r.right + pad}px;width:${Math.max(0, W - r.right - pad)}px;height:${Math.max(0, r.height + 2 * pad)}px;`;
-    ring.style.cssText = `top:${r.top - pad}px;left:${r.left - pad}px;width:${r.width + 2 * pad}px;height:${r.height + 2 * pad}px;`;
+    focus.style.cssText = `top:${r.top - pad}px;left:${r.left - pad}px;width:${r.width + 2 * pad}px;height:${r.height + 2 * pad}px;`;
 
-    const tipW = 320, tipH = tip.offsetHeight || 110;
+    const tipW = Math.min(280, W - 24);
+    const tipH = tip.offsetHeight || 110;
     let tx, ty, side;
     if (r.right + tipW + 24 < W) { tx = r.right + 18; ty = Math.max(8, Math.min(H - tipH - 8, r.top)); side = 'left'; }
     else if (r.bottom + tipH + 24 < H) { tx = Math.max(8, Math.min(W - tipW - 8, r.left)); ty = r.bottom + 18; side = 'top'; }
     else { tx = Math.max(8, Math.min(W - tipW - 8, r.left)); ty = Math.max(8, r.top - tipH - 18); side = 'bottom'; }
     tip.style.left = `${tx}px`; tip.style.top = `${ty}px`;
 
-    const ax = side === 'left' ? r.right + 4 : r.left + r.width / 2 - 8;
-    const ay = side === 'top' ? r.bottom + 4 : side === 'bottom' ? r.top - 12 : r.top + r.height / 2 - 8;
-    arrow.style.left = `${ax}px`; arrow.style.top = `${ay}px`;
-    const c = getComputedStyle(root).getPropertyValue('--gd-accent') || '#f5d042';
-    arrow.style.borderWidth =
-      side === 'left' ? '8px 14px 8px 0' :
-      side === 'top' ? '0 8px 14px 8px' :
-      side === 'bottom' ? '14px 8px 0 8px' : '8px 0 8px 14px';
-    arrow.style.borderColor =
-      side === 'left' ? `transparent ${c} transparent transparent` :
-      side === 'top' ? `transparent transparent ${c} transparent` :
-      side === 'bottom' ? `${c} transparent transparent transparent` :
-      `transparent transparent transparent ${c}`;
+    const targetX = r.left + Math.min(r.width * 0.45, 22);
+    const targetY = r.top + Math.min(r.height * 0.5, 22);
+    pointer.style.left = `${targetX}px`;
+    pointer.style.top = `${targetY}px`;
+
+    const startX = lastPointer.x;
+    const startY = lastPointer.y;
+    const endX = tx + (side === 'left' ? 0 : tipW * 0.5);
+    const endY = ty + (side === 'top' ? 0 : tipH * 0.5);
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const length = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    line.style.left = `${startX}px`;
+    line.style.top = `${startY}px`;
+    line.style.width = `${length}px`;
+    line.style.transform = `rotate(${angle}deg)`;
+
+    lastPointer = { x: targetX, y: targetY };
   };
 
   reposition();
@@ -184,6 +226,7 @@ export async function show({ element, title, body, stepIndex, totalSteps, accent
   if (!listenersAttached) {
     window.addEventListener('resize', onReposition, true);
     window.addEventListener('scroll', onReposition, true);
+    document.addEventListener('mousemove', onMouseMove, true);
     document.addEventListener('keydown', onKeydown, true);
     listenersAttached = true;
   }

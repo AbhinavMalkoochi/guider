@@ -17,6 +17,7 @@ export async function captureViewport() {
     height: window.innerHeight,
     windowWidth: document.documentElement.clientWidth,
     windowHeight: document.documentElement.clientHeight,
+    ignoreElements: (element) => shouldIgnoreElement(element),
     onclone: (clonedDoc) => sanitizeClonedDocument(document, clonedDoc),
   };
 
@@ -24,12 +25,17 @@ export async function captureViewport() {
   try {
     canvas = await html2canvas(document.body, options);
   } catch {
-    canvas = await html2canvas(document.documentElement, options);
+    try {
+      canvas = await html2canvas(document.documentElement, options);
+    } catch {
+      canvas = createFallbackCanvas();
+    }
   }
   return canvas.toDataURL('image/jpeg', 0.7);
 }
 
 const UNSUPPORTED_COLOR_FN = /(oklch|oklab|lch|lab|color-mix)\(/i;
+const UNSUPPORTED_COLOR_SPACE = /\sin\s+(oklch|oklab|lch|lab)\b/gi;
 const COLOR_PROPS = [
   'color',
   'backgroundColor',
@@ -46,6 +52,10 @@ const COLOR_PROPS = [
   'textShadow',
 ];
 
+function shouldIgnoreElement(element) {
+  return !!element?.closest?.('[data-guider-panel], [data-guider-launcher], [data-guider-dock], #guider-highlight-root');
+}
+
 function sanitizeClonedDocument(sourceDoc, clonedDoc) {
   const sourceRootStyle = getComputedStyle(sourceDoc.documentElement);
   const cloneRootStyle = clonedDoc.documentElement.style;
@@ -55,6 +65,21 @@ function sanitizeClonedDocument(sourceDoc, clonedDoc) {
     if (UNSUPPORTED_COLOR_FN.test(value)) {
       cloneRootStyle.setProperty(name, '#000000');
     }
+  }
+
+  for (const styleEl of clonedDoc.querySelectorAll('style')) {
+    if (!styleEl.textContent || !UNSUPPORTED_COLOR_FN.test(styleEl.textContent)) continue;
+    styleEl.textContent = sanitizeCssText(styleEl.textContent);
+  }
+
+  for (const cloneEl of clonedDoc.querySelectorAll('[style]')) {
+    const inlineStyle = cloneEl.getAttribute('style');
+    if (!inlineStyle || !UNSUPPORTED_COLOR_FN.test(inlineStyle)) continue;
+    cloneEl.setAttribute('style', sanitizeCssText(inlineStyle));
+  }
+
+  for (const widgetEl of clonedDoc.querySelectorAll('[data-guider-panel], [data-guider-launcher], [data-guider-dock], #guider-highlight-root')) {
+    widgetEl.remove();
   }
 
   const sourceEls = sourceDoc.querySelectorAll('*');
@@ -80,4 +105,35 @@ function fallbackColor(prop) {
   if (prop === 'backgroundColor') return 'transparent';
   if (prop === 'fill' || prop === 'stroke') return '#000000';
   return '#111111';
+}
+
+function sanitizeCssText(cssText) {
+  return cssText
+    .replace(/color-mix\([^)]*\)/gi, 'rgba(17,17,17,0.12)')
+    .replace(/oklch\([^)]*\)/gi, 'rgb(17 17 17)')
+    .replace(/oklab\([^)]*\)/gi, 'rgb(17 17 17)')
+    .replace(/(?<!-)\blch\([^)]*\)/gi, 'rgb(17 17 17)')
+    .replace(/(?<!-)\blab\([^)]*\)/gi, 'rgb(17 17 17)')
+    .replace(UNSUPPORTED_COLOR_SPACE, '');
+}
+
+function createFallbackCanvas() {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(window.innerWidth));
+  canvas.height = Math.max(1, Math.round(window.innerHeight));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  gradient.addColorStop(0, '#f7f7f5');
+  gradient.addColorStop(1, '#ffffff');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#111111';
+  ctx.font = '500 20px sans-serif';
+  ctx.fillText('Guider fallback capture', 28, 42);
+  ctx.fillStyle = 'rgba(17,17,17,0.55)';
+  ctx.font = '14px sans-serif';
+  ctx.fillText(window.location.pathname || '/', 28, 66);
+  return canvas;
 }
