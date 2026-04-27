@@ -1,6 +1,6 @@
 {
   "version": "0.1",
-  "generatedAt": "2026-04-27T01:40:32.437Z",
+  "generatedAt": "2026-04-27T03:56:39.767Z",
   "project": "sample-next-app",
   "pages": [
     {
@@ -25,7 +25,9 @@
             "controls": null
           },
           "outcome": "navigates to /dashboard",
-          "type": "link"
+          "type": "link",
+          "purpose": "Navigate to the user dashboard.",
+          "visibleWhen": null
         },
         {
           "tag": "Link",
@@ -40,7 +42,9 @@
             "controls": null
           },
           "outcome": "navigates to /pricing",
-          "type": "link"
+          "type": "link",
+          "purpose": "Open the pricing page to view plans.",
+          "visibleWhen": null
         }
       ],
       "visuals": [],
@@ -52,7 +56,12 @@
       "sourceFiles": [
         "app/(marketing)/page.tsx"
       ],
-      "linkedFrom": []
+      "linkedFrom": [],
+      "purpose": "The marketing homepage provides quick navigation to key sections from the home route.",
+      "summary": "You see two links on the page: Open dashboard and See pricing. Activating them takes you to the dashboard or the pricing page respectively.",
+      "modals": [],
+      "dropdowns": [],
+      "confidence": "high"
     },
     {
       "route": "/billing",
@@ -75,7 +84,9 @@
             "controls": null
           },
           "outcome": "navigates to /billing/invoices",
-          "type": "link"
+          "type": "link",
+          "purpose": "Open the invoices section to review and manage invoices.",
+          "visibleWhen": null
         },
         {
           "tag": "button",
@@ -89,8 +100,10 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "button"
+          "outcome": "unknown",
+          "type": "button",
+          "purpose": "Update the user's saved payment method.",
+          "visibleWhen": null
         },
         {
           "tag": "button",
@@ -104,8 +117,10 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "button"
+          "outcome": "unknown",
+          "type": "button",
+          "purpose": "Upgrade the user's subscription plan.",
+          "visibleWhen": null
         }
       ],
       "visuals": [],
@@ -119,7 +134,12 @@
       "linkedFrom": [
         "/billing/:tab",
         "/dashboard"
-      ]
+      ],
+      "purpose": "Let users manage their billing settings, invoices, and subscription plan.",
+      "summary": "The billing page provides quick access to invoices, a way to update payment details, and an option to upgrade the subscription plan.",
+      "modals": [],
+      "dropdowns": [],
+      "confidence": "high"
     },
     {
       "route": "/billing/:tab",
@@ -142,7 +162,9 @@
             "controls": null
           },
           "outcome": "navigates to /billing",
-          "type": "link"
+          "type": "link",
+          "purpose": "Navigate to the main billing overview",
+          "visibleWhen": null
         },
         {
           "tag": "Link",
@@ -157,7 +179,9 @@
             "controls": null
           },
           "outcome": "navigates to /billing/invoices",
-          "type": "link"
+          "type": "link",
+          "purpose": "Open the invoices section",
+          "visibleWhen": null
         },
         {
           "tag": "Link",
@@ -172,7 +196,9 @@
             "controls": null
           },
           "outcome": "navigates to /billing/upgrade",
-          "type": "link"
+          "type": "link",
+          "purpose": "Open the upgrade options",
+          "visibleWhen": null
         },
         {
           "tag": "button",
@@ -186,15 +212,19 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "button"
+          "outcome": "unknown",
+          "type": "button",
+          "purpose": "Start the subscription cancellation process",
+          "visibleWhen": null
         }
       ],
       "visuals": [
         {
           "tag": "Badge",
           "label": "Pro",
-          "kind": "badge"
+          "kind": "badge",
+          "describes": "Indicates the user's current subscription tier is Pro",
+          "visibleWhen": "subscription plan is 'pro'"
         }
       ],
       "links": [
@@ -215,7 +245,12 @@
         "/billing",
         "/billing/:tab",
         "/dashboard"
-      ]
+      ],
+      "purpose": "Billing management page that lets you view your plan, access invoices, upgrade, or cancel.",
+      "summary": "The page shows navigation to Overview, Invoices, and Upgrade, plus a Cancel subscription button. A Pro badge may appear to indicate your current plan.",
+      "modals": [],
+      "dropdowns": [],
+      "confidence": "high"
     },
     {
       "route": "/dashboard",
@@ -244,7 +279,9 @@
             "controls": null
           },
           "outcome": "navigates to /billing",
-          "type": "link"
+          "type": "link",
+          "purpose": "Navigate to Billing",
+          "visibleWhen": null
         },
         {
           "tag": "Link",
@@ -259,7 +296,9 @@
             "controls": null
           },
           "outcome": "navigates to /team",
-          "type": "link"
+          "type": "link",
+          "purpose": "Navigate to Team",
+          "visibleWhen": null
         },
         {
           "tag": "Link",
@@ -274,7 +313,9 @@
             "controls": null
           },
           "outcome": "navigates to /settings",
-          "type": "link"
+          "type": "link",
+          "purpose": "Navigate to Settings",
+          "visibleWhen": null
         },
         {
           "tag": "TabsTrigger",
@@ -288,8 +329,10 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "tab"
+          "outcome": "unknown",
+          "type": "tab",
+          "purpose": "Switch to the Overview tab",
+          "visibleWhen": null
         },
         {
           "tag": "TabsTrigger",
@@ -303,8 +346,10 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "tab"
+          "outcome": "unknown",
+          "type": "tab",
+          "purpose": "Switch to the Members tab",
+          "visibleWhen": null
         },
         {
           "tag": "TabsTrigger",
@@ -318,8 +363,10 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "tab"
+          "outcome": "unknown",
+          "type": "tab",
+          "purpose": "Switch to the Usage tab",
+          "visibleWhen": null
         },
         {
           "tag": "button",
@@ -334,7 +381,9 @@
             "controls": null
           },
           "outcome": "navigates to /billing/upgrade",
-          "type": "button"
+          "type": "button",
+          "purpose": "Open plan upgrade flow",
+          "visibleWhen": null
         },
         {
           "tag": "button",
@@ -349,7 +398,9 @@
             "controls": null
           },
           "outcome": "calls /api/export",
-          "type": "button"
+          "type": "button",
+          "purpose": "Export the dashboard data",
+          "visibleWhen": null
         },
         {
           "tag": "button",
@@ -364,7 +415,9 @@
             "controls": null
           },
           "outcome": "navigates to /admin",
-          "type": "button"
+          "type": "button",
+          "purpose": "Open admin panel",
+          "visibleWhen": "user is admin"
         },
         {
           "tag": "Dialog.Trigger",
@@ -378,8 +431,10 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "button"
+          "outcome": "opens a dialog",
+          "type": "modal-trigger",
+          "purpose": "Open invite teammate dialog",
+          "visibleWhen": null
         },
         {
           "tag": "button",
@@ -393,12 +448,14 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "button"
+          "outcome": "unknown",
+          "type": "button",
+          "purpose": "Submit a teammate invitation inside the dialog",
+          "visibleWhen": null
         },
         {
           "tag": "form",
-          "label": "Admin Editor Viewer Send invite Cancel",
+          "label": "Remove",
           "href": null,
           "testId": null,
           "guiderId": null,
@@ -408,12 +465,14 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": "closes a dialog",
-          "type": "form"
+          "outcome": "unknown",
+          "type": "button",
+          "purpose": "Remove a teammate from the team",
+          "visibleWhen": "user is admin"
         },
         {
           "tag": "input",
-          "label": "Email",
+          "label": "Change role",
           "href": null,
           "testId": null,
           "guiderId": null,
@@ -423,12 +482,14 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "input"
+          "outcome": "unknown",
+          "type": "button",
+          "purpose": "Change a teammate's role",
+          "visibleWhen": "user is admin"
         },
         {
           "tag": "select",
-          "label": "Admin Editor Viewer",
+          "label": "Admin Editor Viewer Send invite Cancel",
           "href": null,
           "testId": null,
           "guiderId": null,
@@ -438,120 +499,18 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "input"
-        },
-        {
-          "tag": "option",
-          "label": "Admin",
-          "href": null,
-          "testId": null,
-          "guiderId": null,
-          "aria": {
-            "label": null,
-            "role": null,
-            "describedby": null,
-            "controls": null
-          },
-          "outcome": null,
-          "type": "button"
-        },
-        {
-          "tag": "option",
-          "label": "Editor",
-          "href": null,
-          "testId": null,
-          "guiderId": null,
-          "aria": {
-            "label": null,
-            "role": null,
-            "describedby": null,
-            "controls": null
-          },
-          "outcome": null,
-          "type": "button"
-        },
-        {
-          "tag": "option",
-          "label": "Viewer",
-          "href": null,
-          "testId": null,
-          "guiderId": null,
-          "aria": {
-            "label": null,
-            "role": null,
-            "describedby": null,
-            "controls": null
-          },
-          "outcome": null,
-          "type": "button"
-        },
-        {
-          "tag": "button",
-          "label": "Send invite",
-          "href": null,
-          "testId": null,
-          "guiderId": null,
-          "aria": {
-            "label": null,
-            "role": null,
-            "describedby": null,
-            "controls": null
-          },
-          "outcome": null,
-          "type": "button"
-        },
-        {
-          "tag": "button",
-          "label": "Cancel",
-          "href": null,
-          "testId": null,
-          "guiderId": null,
-          "aria": {
-            "label": null,
-            "role": null,
-            "describedby": null,
-            "controls": null
-          },
           "outcome": "closes a dialog",
-          "type": "button"
-        },
-        {
-          "tag": "button",
-          "label": "Remove",
-          "href": null,
-          "testId": null,
-          "guiderId": "teamtable-el-0",
-          "aria": {
-            "label": null,
-            "role": null,
-            "describedby": null,
-            "controls": null
-          },
-          "outcome": null,
-          "type": "button"
-        },
-        {
-          "tag": "button",
-          "label": "Change role",
-          "href": null,
-          "testId": null,
-          "guiderId": "teamtable-el-1",
-          "aria": {
-            "label": null,
-            "role": null,
-            "describedby": null,
-            "controls": null
-          },
-          "outcome": null,
-          "type": "button"
+          "type": "form",
+          "purpose": "Invite teammate form inside dialog",
+          "visibleWhen": null
         }
       ],
       "visuals": [
         {
           "tag": "table",
-          "label": "Name Role Actions Alice Admin Remove Change role",
-          "kind": "table"
+          "label": "Name Role Actions",
+          "kind": "table",
+          "describes": "Table showing teammates with their roles and actions to remove or change role"
         }
       ],
       "links": [
@@ -574,7 +533,30 @@
       ],
       "linkedFrom": [
         "/"
-      ]
+      ],
+      "purpose": "Provide a dashboard to manage billing, team access, and settings, with tabs for overview, members, and usage, plus actions to upgrade, export data, invite teammates, and administer roles.",
+      "summary": "On this page you can navigate to Billing, Team, and Settings, switch between Overview, Members, and Usage tabs, upgrade your plan, export data, and access the Admin area. You can invite teammates via a dialog, and manage current teammates from a table that shows names, roles, and actions like removing or changing roles.",
+      "modals": [
+        {
+          "trigger": "Invite teammate",
+          "purpose": "Invite a teammate to the account",
+          "actions": [
+            "Send invite",
+            "Cancel"
+          ]
+        }
+      ],
+      "dropdowns": [
+        {
+          "trigger": "Role",
+          "items": [
+            "Admin",
+            "Editor",
+            "Viewer"
+          ]
+        }
+      ],
+      "confidence": "high"
     },
     {
       "route": "/settings/api-keys",
@@ -597,8 +579,10 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "button"
+          "outcome": "Opens or navigates to the flow to generate a new API key (key will be created after confirmation).",
+          "type": "button",
+          "purpose": "Start the process to create a new API key.",
+          "visibleWhen": null
         },
         {
           "tag": "button",
@@ -612,15 +596,18 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "button"
+          "outcome": "Removes access by revoking the selected key; key will be unusable from this point forward.",
+          "type": "button",
+          "purpose": "Revoke an existing API key.",
+          "visibleWhen": null
         }
       ],
       "visuals": [
         {
           "tag": "table",
           "label": "Name Created prod 2025-01-02 Revoke",
-          "kind": "table"
+          "kind": "table",
+          "describes": "A table listing API keys with their names, creation dates, and a Revoke action per row."
         }
       ],
       "links": [],
@@ -628,7 +615,12 @@
       "sourceFiles": [
         "pages/settings/api-keys.jsx"
       ],
-      "linkedFrom": []
+      "linkedFrom": [],
+      "purpose": "Manage API keys for the account from the Settings area.",
+      "summary": "This page shows a list of API keys and allows creating new keys or revoking existing ones.",
+      "modals": [],
+      "dropdowns": [],
+      "confidence": "high"
     },
     {
       "route": "/team",
@@ -653,7 +645,9 @@
             "controls": null
           },
           "outcome": "navigates to /team/invite",
-          "type": "link"
+          "type": "link",
+          "purpose": "Open the page to invite a new team member",
+          "visibleWhen": null
         },
         {
           "tag": "button",
@@ -667,8 +661,10 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "button"
+          "outcome": "opens the billing/seats management modal",
+          "type": "button",
+          "purpose": "Open billing/seats management modal",
+          "visibleWhen": "subscription plan is Pro"
         },
         {
           "tag": "button",
@@ -682,8 +678,10 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "button"
+          "outcome": "starts the Add SSO flow",
+          "type": "button",
+          "purpose": "Start the process to add Single Sign-On configuration",
+          "visibleWhen": null
         },
         {
           "tag": "button",
@@ -697,8 +695,10 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "button"
+          "outcome": "unknown",
+          "type": "button",
+          "purpose": "Remove a team member",
+          "visibleWhen": null
         },
         {
           "tag": "button",
@@ -712,15 +712,18 @@
             "describedby": null,
             "controls": null
           },
-          "outcome": null,
-          "type": "button"
+          "outcome": "unknown",
+          "type": "button",
+          "purpose": "Change a team member's role",
+          "visibleWhen": null
         }
       ],
       "visuals": [
         {
           "tag": "table",
-          "label": "Name Role Actions Alice Admin Remove Change role",
-          "kind": "table"
+          "label": "Name, Role, Actions",
+          "kind": "table",
+          "describes": "Table listing team members with their current roles and available actions"
         }
       ],
       "links": [
@@ -738,7 +741,20 @@
       ],
       "linkedFrom": [
         "/dashboard"
-      ]
+      ],
+      "purpose": "This page lists and manages your team members, their roles, and related security/permissions settings.",
+      "summary": "You can view the team table, invite new members, and perform actions like removing members or changing their roles. Some actions may be gated behind a Pro plan. You can open a billing/seats modal from here and start adding SSO configuration.",
+      "modals": [
+        {
+          "trigger": "Manage seats",
+          "purpose": "Billing/seats management modal for the team",
+          "actions": [
+            "unknown"
+          ]
+        }
+      ],
+      "dropdowns": [],
+      "confidence": "medium"
     }
   ]
 }

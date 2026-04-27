@@ -1,0 +1,921 @@
+{
+  "version": "0.1",
+  "generatedAt": "2026-04-27T04:55:46.631Z",
+  "project": "test-app",
+  "pages": [
+    {
+      "route": "/src/app",
+      "file": "src/app/page.tsx",
+      "router": "app",
+      "categories": [],
+      "interactive": [
+        {
+          "tag": "button",
+          "label": "+ Create Resource",
+          "href": null,
+          "testId": null,
+          "guiderId": "create-resource-btn",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "⚙️",
+          "href": null,
+          "testId": null,
+          "guiderId": "dashboard-settings",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "select",
+          "label": "Last 24 Hours Last 7 Days Last 30 Days",
+          "href": null,
+          "testId": null,
+          "guiderId": "utilization-timeframe",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "input"
+        },
+        {
+          "tag": "option",
+          "label": "Last 24 Hours",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "option",
+          "label": "Last 7 Days",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "option",
+          "label": "Last 30 Days",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "📈 Scale Out Cluster Add nodes to prod-eks",
+          "href": null,
+          "testId": null,
+          "guiderId": "quick-scale-out",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "🔑 Rotate Root Keys Last rotated 89 days ago",
+          "href": null,
+          "testId": null,
+          "guiderId": "quick-rotate-keys",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "💾 Trigger Snapshot Manual EBS backup",
+          "href": null,
+          "testId": null,
+          "guiderId": "quick-backup",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [],
+      "links": [],
+      "conditions": [],
+      "sourceFiles": [
+        "src/app/page.tsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/src/app/billing",
+      "file": "src/app/billing/page.tsx",
+      "router": "app",
+      "categories": [
+        "billing"
+      ],
+      "interactive": [
+        {
+          "tag": "button",
+          "label": "Update payment method →",
+          "href": null,
+          "testId": null,
+          "guiderId": "update-payment",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Download All PDF",
+          "href": null,
+          "testId": null,
+          "guiderId": "download-all-invoices",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "PDF",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [
+        {
+          "tag": "table",
+          "label": "Invoice ID Date Amount Status Download",
+          "kind": "table"
+        }
+      ],
+      "links": [],
+      "conditions": [],
+      "sourceFiles": [
+        "src/app/billing/page.tsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/src/app/compute/clusters",
+      "file": "src/app/compute/clusters/page.tsx",
+      "router": "app",
+      "categories": [],
+      "interactive": [
+        {
+          "tag": "button",
+          "label": "Create New Resource",
+          "href": null,
+          "testId": null,
+          "guiderId": "create-compute-clusters",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [],
+      "links": [],
+      "conditions": [],
+      "sourceFiles": [
+        "src/app/compute/clusters/page.tsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/src/app/compute/instances",
+      "file": "src/app/compute/instances/page.tsx",
+      "router": "app",
+      "categories": [],
+      "interactive": [
+        {
+          "tag": "button",
+          "label": "Launch Instance",
+          "href": null,
+          "testId": null,
+          "guiderId": "launch-instance",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Actions ▾",
+          "href": null,
+          "testId": null,
+          "guiderId": "instance-actions",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "input",
+          "label": "Filter instances by name, ID, or tag...",
+          "href": null,
+          "testId": null,
+          "guiderId": "search-instances",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "input"
+        },
+        {
+          "tag": "select",
+          "label": "All Regions us-east-1 eu-west-2",
+          "href": null,
+          "testId": null,
+          "guiderId": "filter-region",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "input"
+        },
+        {
+          "tag": "option",
+          "label": "All Regions",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "option",
+          "label": "us-east-1",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "option",
+          "label": "eu-west-2",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "select",
+          "label": "Any State Running Stopped",
+          "href": null,
+          "testId": null,
+          "guiderId": "filter-state",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "input"
+        },
+        {
+          "tag": "option",
+          "label": "Any State",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "option",
+          "label": "Running",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "option",
+          "label": "Stopped",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "input",
+          "label": null,
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "input"
+        },
+        {
+          "tag": "button",
+          "label": "Manage",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Prev",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "1",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "2",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "3",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Next",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [
+        {
+          "tag": "table",
+          "label": "Name Instance ID State Type Public IP Actions",
+          "kind": "table"
+        }
+      ],
+      "links": [],
+      "conditions": [
+        {
+          "tag": "span",
+          "condition": "i === 1"
+        }
+      ],
+      "sourceFiles": [
+        "src/app/compute/instances/page.tsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/src/app/database/clusters",
+      "file": "src/app/database/clusters/page.tsx",
+      "router": "app",
+      "categories": [],
+      "interactive": [
+        {
+          "tag": "button",
+          "label": "Create New Resource",
+          "href": null,
+          "testId": null,
+          "guiderId": "create-database-clusters",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [],
+      "links": [],
+      "conditions": [],
+      "sourceFiles": [
+        "src/app/database/clusters/page.tsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/src/app/network/dns",
+      "file": "src/app/network/dns/page.tsx",
+      "router": "app",
+      "categories": [],
+      "interactive": [
+        {
+          "tag": "button",
+          "label": "Create New Resource",
+          "href": null,
+          "testId": null,
+          "guiderId": "create-network-dns",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [],
+      "links": [],
+      "conditions": [],
+      "sourceFiles": [
+        "src/app/network/dns/page.tsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/src/app/network/vpc",
+      "file": "src/app/network/vpc/page.tsx",
+      "router": "app",
+      "categories": [],
+      "interactive": [
+        {
+          "tag": "button",
+          "label": "Create New Resource",
+          "href": null,
+          "testId": null,
+          "guiderId": "create-network-vpc",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [],
+      "links": [],
+      "conditions": [],
+      "sourceFiles": [
+        "src/app/network/vpc/page.tsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/src/app/security/firewall",
+      "file": "src/app/security/firewall/page.tsx",
+      "router": "app",
+      "categories": [
+        "security"
+      ],
+      "interactive": [
+        {
+          "tag": "button",
+          "label": "Create New Resource",
+          "href": null,
+          "testId": null,
+          "guiderId": "create-security-firewall",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [],
+      "links": [],
+      "conditions": [],
+      "sourceFiles": [
+        "src/app/security/firewall/page.tsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/src/app/security/iam",
+      "file": "src/app/security/iam/page.tsx",
+      "router": "app",
+      "categories": [
+        "security"
+      ],
+      "interactive": [
+        {
+          "tag": "button",
+          "label": "Create New Resource",
+          "href": null,
+          "testId": null,
+          "guiderId": "create-security-iam",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [],
+      "links": [],
+      "conditions": [],
+      "sourceFiles": [
+        "src/app/security/iam/page.tsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/src/app/settings/api-keys",
+      "file": "src/app/settings/api-keys/page.tsx",
+      "router": "app",
+      "categories": [
+        "api-keys",
+        "settings"
+      ],
+      "interactive": [],
+      "visuals": [],
+      "links": [],
+      "conditions": [],
+      "sourceFiles": [
+        "src/app/settings/api-keys/page.tsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/src/app/settings/profile",
+      "file": "src/app/settings/profile/page.tsx",
+      "router": "app",
+      "categories": [
+        "security",
+        "notifications",
+        "settings"
+      ],
+      "interactive": [
+        {
+          "tag": "button",
+          "label": "General",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Security",
+          "href": null,
+          "testId": null,
+          "guiderId": "tab-security",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Notifications",
+          "href": null,
+          "testId": null,
+          "guiderId": "tab-notifications",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Preferences",
+          "href": null,
+          "testId": null,
+          "guiderId": "tab-preferences",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "input",
+          "label": null,
+          "href": null,
+          "testId": null,
+          "guiderId": "input-firstname",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "input"
+        },
+        {
+          "tag": "button",
+          "label": "Change",
+          "href": null,
+          "testId": null,
+          "guiderId": "change-email-btn",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Manage",
+          "href": null,
+          "testId": null,
+          "guiderId": "manage-mfa",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Delete Account",
+          "href": null,
+          "testId": null,
+          "guiderId": "delete-account",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Cancel",
+          "href": null,
+          "testId": null,
+          "guiderId": "cancel-profile",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Save Changes",
+          "href": null,
+          "testId": null,
+          "guiderId": "save-profile",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [],
+      "links": [],
+      "conditions": [],
+      "sourceFiles": [
+        "src/app/settings/profile/page.tsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/src/app/storage/buckets",
+      "file": "src/app/storage/buckets/page.tsx",
+      "router": "app",
+      "categories": [],
+      "interactive": [
+        {
+          "tag": "button",
+          "label": "Create New Resource",
+          "href": null,
+          "testId": null,
+          "guiderId": "create-storage-buckets",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [],
+      "links": [],
+      "conditions": [],
+      "sourceFiles": [
+        "src/app/storage/buckets/page.tsx"
+      ],
+      "linkedFrom": []
+    }
+  ]
+}

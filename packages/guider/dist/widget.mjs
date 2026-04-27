@@ -1,3 +1,4 @@
+"use client";
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -10,7 +11,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 // src/widget/screenshot.js
 async function captureViewport() {
   const { default: html2canvas } = await import("html2canvas");
-  const canvas = await html2canvas(document.body, {
+  const options = {
     backgroundColor: null,
     useCORS: true,
     logging: false,
@@ -20,9 +21,65 @@ async function captureViewport() {
     width: window.innerWidth,
     height: window.innerHeight,
     windowWidth: document.documentElement.clientWidth,
-    windowHeight: document.documentElement.clientHeight
-  });
+    windowHeight: document.documentElement.clientHeight,
+    onclone: (clonedDoc) => sanitizeClonedDocument(document, clonedDoc)
+  };
+  let canvas;
+  try {
+    canvas = await html2canvas(document.body, options);
+  } catch {
+    canvas = await html2canvas(document.documentElement, options);
+  }
   return canvas.toDataURL("image/jpeg", 0.7);
+}
+var UNSUPPORTED_COLOR_FN = /(oklch|oklab|lch|lab|color-mix)\(/i;
+var COLOR_PROPS = [
+  "color",
+  "backgroundColor",
+  "borderTopColor",
+  "borderRightColor",
+  "borderBottomColor",
+  "borderLeftColor",
+  "outlineColor",
+  "textDecorationColor",
+  "caretColor",
+  "fill",
+  "stroke",
+  "boxShadow",
+  "textShadow"
+];
+function sanitizeClonedDocument(sourceDoc, clonedDoc) {
+  const sourceRootStyle = getComputedStyle(sourceDoc.documentElement);
+  const cloneRootStyle = clonedDoc.documentElement.style;
+  for (const name of sourceRootStyle) {
+    if (!name.startsWith("--")) continue;
+    const value = sourceRootStyle.getPropertyValue(name);
+    if (UNSUPPORTED_COLOR_FN.test(value)) {
+      cloneRootStyle.setProperty(name, "#000000");
+    }
+  }
+  const sourceEls = sourceDoc.querySelectorAll("*");
+  const cloneEls = clonedDoc.querySelectorAll("*");
+  const len = Math.min(sourceEls.length, cloneEls.length);
+  for (let i = 0; i < len; i += 1) {
+    const sourceEl = sourceEls[i];
+    const cloneEl = cloneEls[i];
+    const computed = getComputedStyle(sourceEl);
+    for (const prop of COLOR_PROPS) {
+      const value = computed[prop];
+      if (!value || !UNSUPPORTED_COLOR_FN.test(value)) continue;
+      if (prop === "boxShadow" || prop === "textShadow") {
+        cloneEl.style[prop] = "none";
+        continue;
+      }
+      cloneEl.style[prop] = fallbackColor(prop);
+    }
+  }
+}
+function fallbackColor(prop) {
+  if (prop === "backgroundColor") return "transparent";
+  if (prop === "fill" || prop === "stroke") return "#000000";
+  return "#111111";
 }
 
 // src/widget/voice.js
@@ -1042,6 +1099,8 @@ function GuiderWidget({
     ask(q);
   };
   const right = position === "bottom-right";
+  const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  const statusText = busy ? "Thinking..." : agentRunning ? "Agent is moving through the flow." : recording ? "Listening..." : (latestAssistant == null ? void 0 : latestAssistant.text) || greeting;
   return /* @__PURE__ */ jsxs(Fragment, { children: [
     /* @__PURE__ */ jsx(
       "button",
@@ -1057,20 +1116,25 @@ function GuiderWidget({
           bottom: 20,
           [right ? "right" : "left"]: 20,
           zIndex: 2147483646,
-          width: 56,
-          height: 56,
-          borderRadius: 28,
-          border: "none",
+          width: 20,
+          height: 20,
+          borderRadius: 999,
+          border: `1px solid ${hexAlpha(accent, 0.5)}`,
           cursor: "pointer",
-          background: accent,
-          color: "#0e1118",
-          boxShadow: `0 12px 32px rgba(0,0,0,.35), 0 0 0 4px ${hexAlpha(accent, 0.18)}`,
-          fontWeight: 700,
-          fontSize: 22,
+          background: "#ffffff",
+          color: "#111111",
+          boxShadow: `0 0 0 6px ${hexAlpha(accent, 0.15)}, 0 14px 28px rgba(0,0,0,.18)`,
           display: "grid",
-          placeItems: "center"
+          placeItems: "center",
+          padding: 0
         },
-        children: open ? "\xD7" : "?"
+        children: /* @__PURE__ */ jsx(
+          "span",
+          {
+            "aria-hidden": "true",
+            style: { width: 6, height: 6, borderRadius: "50%", background: accent, display: "block" }
+          }
+        )
       }
     ),
     open && /* @__PURE__ */ jsxs(
@@ -1084,147 +1148,173 @@ function GuiderWidget({
         "aria-label": "Guider assistant",
         style: {
           position: "fixed",
-          bottom: 88,
+          bottom: 54,
           [right ? "right" : "left"]: 20,
           zIndex: 2147483646,
-          width: 380,
-          maxWidth: "calc(100vw - 40px)",
-          height: 540,
-          maxHeight: "calc(100vh - 120px)",
-          background: "#0e1118",
-          color: "#f3f4f6",
-          border: `1px solid ${hexAlpha(accent, 0.25)}`,
-          borderRadius: 14,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 30px 80px rgba(0,0,0,.6)",
+          width: 420,
+          maxWidth: "calc(100vw - 24px)",
+          display: "grid",
+          gap: 8,
           fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto'
         },
         children: [
-          /* @__PURE__ */ jsxs("header", { style: { padding: "14px 16px", borderBottom: "1px solid #1c2230", display: "flex", alignItems: "center", gap: 10 }, children: [
-            /* @__PURE__ */ jsx("div", { "aria-hidden": "true", style: { width: 8, height: 8, borderRadius: 4, background: accent, boxShadow: `0 0 12px ${accent}` } }),
-            /* @__PURE__ */ jsx("div", { style: { fontWeight: 700, letterSpacing: ".02em" }, children: "Guider" }),
-            /* @__PURE__ */ jsx("div", { style: { marginLeft: "auto", fontSize: 11, color: "#8b93a7" }, children: map ? `${((_a = map.pages) == null ? void 0 : _a.length) || 0} pages mapped` : "loading map\u2026" }),
-            agent && /* @__PURE__ */ jsx(
-              "button",
-              {
-                "data-guider": "guider-agent-toggle",
-                onClick: () => setAgentEnabled((v) => !v),
-                "aria-pressed": agentEnabled,
-                title: agentEnabled ? "Agent will execute steps" : "Agent disabled \u2014 guided mode",
-                style: {
-                  background: agentEnabled ? accent : "transparent",
-                  color: agentEnabled ? "#0e1118" : "#8b93a7",
-                  border: `1px solid ${agentEnabled ? accent : "#2a2f3a"}`,
-                  borderRadius: 6,
-                  padding: "3px 8px",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  letterSpacing: ".04em",
-                  textTransform: "uppercase"
-                },
-                children: "agent"
-              }
-            ),
-            /* @__PURE__ */ jsx(
-              "button",
-              {
-                "data-guider": "guider-close",
-                onClick: () => setOpen(false),
-                "aria-label": "Close Guider",
-                style: { background: "transparent", color: "#8b93a7", border: 0, cursor: "pointer", fontSize: 16, padding: "0 4px" },
-                children: "\xD7"
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsxs("div", { role: "log", "aria-label": "Conversation", style: { flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10 }, children: [
-            messages.length === 0 && /* @__PURE__ */ jsxs("div", { style: { color: "#8b93a7", fontSize: 13, lineHeight: 1.55 }, children: [
-              greeting,
-              /* @__PURE__ */ jsxs("div", { style: { marginTop: 14, fontSize: 11, color: "#5e6675" }, children: [
-                "Tap the mic to speak \xB7 ",
-                agentEnabled ? "Agent mode on \u2014 I will click for you" : "Press Escape to close"
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              role: "status",
+              "aria-live": "polite",
+              style: {
+                justifySelf: right ? "end" : "start",
+                maxWidth: "min(420px, calc(100vw - 24px))",
+                background: "rgba(255,255,255,0.94)",
+                color: "#111111",
+                border: "1px solid rgba(17,17,17,0.08)",
+                borderRadius: 18,
+                padding: "10px 14px",
+                boxShadow: "0 14px 32px rgba(0,0,0,.12)",
+                backdropFilter: "blur(18px)"
+              },
+              children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
+                /* @__PURE__ */ jsx("div", { "aria-hidden": "true", style: { width: 7, height: 7, borderRadius: "50%", background: accent, flex: "0 0 auto" } }),
+                /* @__PURE__ */ jsxs("div", { style: { minWidth: 0, flex: 1 }, children: [
+                  /* @__PURE__ */ jsx("div", { style: { fontSize: 10, letterSpacing: ".14em", textTransform: "uppercase", color: "#6b7280", marginBottom: 2 }, children: agentEnabled ? "Agent ready" : "Guide ready" }),
+                  /* @__PURE__ */ jsx("div", { style: { fontSize: 12.5, lineHeight: 1.45, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: statusText })
+                ] }),
+                /* @__PURE__ */ jsx("div", { style: { fontSize: 10, color: "#6b7280", flex: "0 0 auto" }, children: map ? `${((_a = map.pages) == null ? void 0 : _a.length) || 0} pages` : "loading" })
               ] })
-            ] }),
-            messages.map((m, i) => /* @__PURE__ */ jsx("div", { style: {
-              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-              maxWidth: "85%",
-              padding: "8px 12px",
-              borderRadius: 10,
-              background: m.role === "user" ? accent : "#1a2030",
-              color: m.role === "user" ? "#0e1118" : "#f3f4f6",
-              fontSize: 13,
-              lineHeight: 1.45,
-              border: m.status === "low-confidence" ? "1px dashed #ef9b3b" : m.status === "error" ? "1px solid #f56565" : m.status === "agent-step" ? `1px solid ${hexAlpha(accent, 0.5)}` : "none"
-            }, children: m.text }, i)),
-            (busy || agentRunning) && /* @__PURE__ */ jsx("div", { style: { color: "#8b93a7", fontSize: 12 }, children: agentRunning ? "agent running\u2026" : "thinking\u2026" })
-          ] }),
+            }
+          ),
           /* @__PURE__ */ jsx("div", { ref: liveRef, "aria-live": "polite", "aria-atomic": "true", style: { position: "absolute", clip: "rect(0 0 0 0)", clipPath: "inset(50%)", width: 1, height: 1, overflow: "hidden", whiteSpace: "nowrap" } }),
-          /* @__PURE__ */ jsxs("form", { onSubmit, style: { display: "flex", gap: 8, padding: 12, borderTop: "1px solid #1c2230", background: "#0a0d14" }, children: [
-            /* @__PURE__ */ jsx(
-              "button",
-              {
-                type: "button",
-                "data-guider": "guider-mic",
-                onClick: onMicClick,
-                "aria-label": recording ? "Stop recording" : "Start voice recording",
-                "aria-pressed": recording,
-                style: {
-                  background: recording ? "#ef4444" : "#1a2030",
-                  color: "#f3f4f6",
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "0 12px",
-                  cursor: "pointer",
-                  fontSize: 16,
-                  minWidth: 40
-                },
-                children: recording ? "\u25A0" : "\u25CF"
-              }
-            ),
-            /* @__PURE__ */ jsx(
-              "input",
-              {
-                ref: inputRef,
-                "data-guider": "guider-input",
-                value: input,
-                onChange: (e) => setInput(e.target.value),
-                placeholder: recording ? "Recording\u2026" : "Ask Guider\u2026",
-                disabled: recording || busy || agentRunning,
-                "aria-label": "Message Guider",
-                style: {
-                  flex: 1,
-                  background: "#1a2030",
-                  color: "#f3f4f6",
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "0 12px",
-                  outline: "none",
-                  fontSize: 14
-                }
-              }
-            ),
-            /* @__PURE__ */ jsx(
-              "button",
-              {
-                type: "submit",
-                "data-guider": "guider-send",
-                disabled: !input.trim() || busy || agentRunning,
-                style: {
-                  background: accent,
-                  color: "#0e1118",
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "0 14px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  opacity: !input.trim() || busy || agentRunning ? 0.5 : 1
-                },
-                children: "Send"
-              }
-            )
-          ] })
+          /* @__PURE__ */ jsxs(
+            "form",
+            {
+              onSubmit,
+              style: {
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: 8,
+                background: "rgba(255,255,255,0.98)",
+                color: "#111111",
+                border: "1px solid rgba(17,17,17,0.08)",
+                borderRadius: 999,
+                boxShadow: "0 18px 40px rgba(0,0,0,.14)",
+                backdropFilter: "blur(18px)"
+              },
+              children: [
+                agent && /* @__PURE__ */ jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-guider": "guider-agent-toggle",
+                    onClick: () => setAgentEnabled((v) => !v),
+                    "aria-pressed": agentEnabled,
+                    title: agentEnabled ? "Agent will execute steps" : "Agent disabled \u2014 guided mode",
+                    style: {
+                      background: agentEnabled ? "#111111" : "transparent",
+                      color: agentEnabled ? "#ffffff" : "#6b7280",
+                      border: "1px solid rgba(17,17,17,0.08)",
+                      borderRadius: 999,
+                      padding: "0 10px",
+                      height: 36,
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      letterSpacing: ".12em",
+                      textTransform: "uppercase",
+                      flex: "0 0 auto"
+                    },
+                    children: "agent"
+                  }
+                ),
+                /* @__PURE__ */ jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-guider": "guider-mic",
+                    onClick: onMicClick,
+                    "aria-label": recording ? "Stop recording" : "Start voice recording",
+                    "aria-pressed": recording,
+                    style: {
+                      background: recording ? "#111111" : "transparent",
+                      color: recording ? "#ffffff" : "#6b7280",
+                      border: "1px solid rgba(17,17,17,0.08)",
+                      borderRadius: 999,
+                      width: 36,
+                      height: 36,
+                      cursor: "pointer",
+                      fontSize: 13,
+                      flex: "0 0 auto"
+                    },
+                    children: recording ? "Stop" : "Mic"
+                  }
+                ),
+                /* @__PURE__ */ jsx(
+                  "input",
+                  {
+                    ref: inputRef,
+                    "data-guider": "guider-input",
+                    value: input,
+                    onChange: (e) => setInput(e.target.value),
+                    placeholder: recording ? "Recording..." : "Ask where anything lives",
+                    disabled: recording || busy || agentRunning,
+                    "aria-label": "Message Guider",
+                    style: {
+                      flex: 1,
+                      background: "transparent",
+                      color: "#111111",
+                      border: "none",
+                      padding: "0 6px",
+                      outline: "none",
+                      fontSize: 14,
+                      minWidth: 0
+                    }
+                  }
+                ),
+                /* @__PURE__ */ jsx(
+                  "button",
+                  {
+                    type: "submit",
+                    "data-guider": "guider-send",
+                    disabled: !input.trim() || busy || agentRunning,
+                    style: {
+                      background: "#111111",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: 999,
+                      padding: "0 14px",
+                      height: 36,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      opacity: !input.trim() || busy || agentRunning ? 0.5 : 1
+                    },
+                    children: "Go"
+                  }
+                ),
+                /* @__PURE__ */ jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-guider": "guider-close",
+                    onClick: () => setOpen(false),
+                    "aria-label": "Close Guider",
+                    style: {
+                      background: "transparent",
+                      color: "#6b7280",
+                      border: "none",
+                      cursor: "pointer",
+                      width: 28,
+                      height: 28,
+                      borderRadius: "50%",
+                      fontSize: 16,
+                      flex: "0 0 auto"
+                    },
+                    children: "\xD7"
+                  }
+                )
+              ]
+            }
+          )
         ]
       }
     )

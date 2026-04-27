@@ -237,6 +237,14 @@ export function GuiderWidget({
   };
 
   const right = position === 'bottom-right';
+  const latestAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+  const statusText = busy
+    ? 'Thinking...'
+    : agentRunning
+      ? 'Agent is moving through the flow.'
+      : recording
+        ? 'Listening...'
+        : latestAssistant?.text || greeting;
 
   return (
     <>
@@ -249,12 +257,17 @@ export function GuiderWidget({
         onClick={() => setOpen((v) => !v)}
         style={{
           position: 'fixed', bottom: 20, [right ? 'right' : 'left']: 20, zIndex: 2147483646,
-          width: 56, height: 56, borderRadius: 28, border: 'none', cursor: 'pointer',
-          background: accent, color: '#0e1118',
-          boxShadow: `0 12px 32px rgba(0,0,0,.35), 0 0 0 4px ${hexAlpha(accent, 0.18)}`,
-          fontWeight: 700, fontSize: 22, display: 'grid', placeItems: 'center',
+          width: 20, height: 20, borderRadius: 999, border: `1px solid ${hexAlpha(accent, 0.5)}`,
+          cursor: 'pointer', background: '#ffffff', color: '#111111',
+          boxShadow: `0 0 0 6px ${hexAlpha(accent, 0.15)}, 0 14px 28px rgba(0,0,0,.18)`,
+          display: 'grid', placeItems: 'center', padding: 0,
         }}
-      >{open ? '×' : '?'}</button>
+      >
+        <span
+          aria-hidden="true"
+          style={{ width: 6, height: 6, borderRadius: '50%', background: accent, display: 'block' }}
+        />
+      </button>
 
       {open && (
         <div
@@ -263,102 +276,114 @@ export function GuiderWidget({
           data-guider="guider-panel"
           role="dialog" aria-modal="false" aria-label="Guider assistant"
           style={{
-            position: 'fixed', bottom: 88, [right ? 'right' : 'left']: 20, zIndex: 2147483646,
-            width: 380, maxWidth: 'calc(100vw - 40px)', height: 540, maxHeight: 'calc(100vh - 120px)',
-            background: '#0e1118', color: '#f3f4f6', border: `1px solid ${hexAlpha(accent, 0.25)}`,
-            borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-            boxShadow: '0 30px 80px rgba(0,0,0,.6)',
+            position: 'fixed', bottom: 54, [right ? 'right' : 'left']: 20, zIndex: 2147483646,
+            width: 420, maxWidth: 'calc(100vw - 24px)',
+            display: 'grid', gap: 8,
             fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto',
           }}
         >
-          <header style={{ padding: '14px 16px', borderBottom: '1px solid #1c2230', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 4, background: accent, boxShadow: `0 0 12px ${accent}` }} />
-            <div style={{ fontWeight: 700, letterSpacing: '.02em' }}>Guider</div>
-            <div style={{ marginLeft: 'auto', fontSize: 11, color: '#8b93a7' }}>
-              {map ? `${map.pages?.length || 0} pages mapped` : 'loading map…'}
-            </div>
-            {agent && (
-              <button
-                data-guider="guider-agent-toggle"
-                onClick={() => setAgentEnabled((v) => !v)}
-                aria-pressed={agentEnabled}
-                title={agentEnabled ? 'Agent will execute steps' : 'Agent disabled — guided mode'}
-                style={{
-                  background: agentEnabled ? accent : 'transparent',
-                  color: agentEnabled ? '#0e1118' : '#8b93a7',
-                  border: `1px solid ${agentEnabled ? accent : '#2a2f3a'}`,
-                  borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  letterSpacing: '.04em', textTransform: 'uppercase',
-                }}
-              >agent</button>
-            )}
-            <button
-              data-guider="guider-close"
-              onClick={() => setOpen(false)} aria-label="Close Guider"
-              style={{ background: 'transparent', color: '#8b93a7', border: 0, cursor: 'pointer', fontSize: 16, padding: '0 4px' }}
-            >×</button>
-          </header>
-
-          <div role="log" aria-label="Conversation" style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {messages.length === 0 && (
-              <div style={{ color: '#8b93a7', fontSize: 13, lineHeight: 1.55 }}>
-                {greeting}
-                <div style={{ marginTop: 14, fontSize: 11, color: '#5e6675' }}>
-                  Tap the mic to speak · {agentEnabled ? 'Agent mode on — I will click for you' : 'Press Escape to close'}
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              justifySelf: right ? 'end' : 'start',
+              maxWidth: 'min(420px, calc(100vw - 24px))',
+              background: 'rgba(255,255,255,0.94)',
+              color: '#111111',
+              border: '1px solid rgba(17,17,17,0.08)',
+              borderRadius: 18,
+              padding: '10px 14px',
+              boxShadow: '0 14px 32px rgba(0,0,0,.12)',
+              backdropFilter: 'blur(18px)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div aria-hidden="true" style={{ width: 7, height: 7, borderRadius: '50%', background: accent, flex: '0 0 auto' }} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: '#6b7280', marginBottom: 2 }}>
+                  {agentEnabled ? 'Agent ready' : 'Guide ready'}
+                </div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.45, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {statusText}
                 </div>
               </div>
-            )}
-            {messages.map((m, i) => (
-              <div key={i} style={{
-                alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                maxWidth: '85%', padding: '8px 12px', borderRadius: 10,
-                background: m.role === 'user' ? accent : '#1a2030',
-                color: m.role === 'user' ? '#0e1118' : '#f3f4f6',
-                fontSize: 13, lineHeight: 1.45,
-                border: m.status === 'low-confidence' ? '1px dashed #ef9b3b' :
-                        m.status === 'error' ? '1px solid #f56565' :
-                        m.status === 'agent-step' ? `1px solid ${hexAlpha(accent, 0.5)}` : 'none',
-              }}>{m.text}</div>
-            ))}
-            {(busy || agentRunning) && <div style={{ color: '#8b93a7', fontSize: 12 }}>{agentRunning ? 'agent running…' : 'thinking…'}</div>}
+              <div style={{ fontSize: 10, color: '#6b7280', flex: '0 0 auto' }}>
+                {map ? `${map.pages?.length || 0} pages` : 'loading'}
+              </div>
+            </div>
           </div>
 
           {/* Live region for screen readers */}
           <div ref={liveRef} aria-live="polite" aria-atomic="true" style={{ position: 'absolute', clip: 'rect(0 0 0 0)', clipPath: 'inset(50%)', width: 1, height: 1, overflow: 'hidden', whiteSpace: 'nowrap' }} />
 
-          <form onSubmit={onSubmit} style={{ display: 'flex', gap: 8, padding: 12, borderTop: '1px solid #1c2230', background: '#0a0d14' }}>
+          <form
+            onSubmit={onSubmit}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: 8,
+              background: 'rgba(255,255,255,0.98)', color: '#111111',
+              border: '1px solid rgba(17,17,17,0.08)', borderRadius: 999,
+              boxShadow: '0 18px 40px rgba(0,0,0,.14)',
+              backdropFilter: 'blur(18px)',
+            }}
+          >
+            {agent && (
+              <button
+                type="button"
+                data-guider="guider-agent-toggle"
+                onClick={() => setAgentEnabled((v) => !v)}
+                aria-pressed={agentEnabled}
+                title={agentEnabled ? 'Agent will execute steps' : 'Agent disabled — guided mode'}
+                style={{
+                  background: agentEnabled ? '#111111' : 'transparent',
+                  color: agentEnabled ? '#ffffff' : '#6b7280',
+                  border: '1px solid rgba(17,17,17,0.08)',
+                  borderRadius: 999, padding: '0 10px', height: 36,
+                  fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
+                  letterSpacing: '.12em', textTransform: 'uppercase', flex: '0 0 auto',
+                }}
+              >agent</button>
+            )}
             <button
               type="button" data-guider="guider-mic"
               onClick={onMicClick}
               aria-label={recording ? 'Stop recording' : 'Start voice recording'}
               aria-pressed={recording}
               style={{
-                background: recording ? '#ef4444' : '#1a2030',
-                color: '#f3f4f6', border: 'none', borderRadius: 8,
-                padding: '0 12px', cursor: 'pointer', fontSize: 16,
-                minWidth: 40,
+                background: recording ? '#111111' : 'transparent',
+                color: recording ? '#ffffff' : '#6b7280', border: '1px solid rgba(17,17,17,0.08)', borderRadius: 999,
+                width: 36, height: 36, cursor: 'pointer', fontSize: 13, flex: '0 0 auto',
               }}
-            >{recording ? '■' : '●'}</button>
+            >{recording ? 'Stop' : 'Mic'}</button>
             <input
               ref={inputRef} data-guider="guider-input"
               value={input} onChange={(e) => setInput(e.target.value)}
-              placeholder={recording ? 'Recording…' : 'Ask Guider…'}
+              placeholder={recording ? 'Recording...' : 'Ask where anything lives'}
               disabled={recording || busy || agentRunning}
               aria-label="Message Guider"
               style={{
-                flex: 1, background: '#1a2030', color: '#f3f4f6', border: 'none',
-                borderRadius: 8, padding: '0 12px', outline: 'none', fontSize: 14,
+                flex: 1, background: 'transparent', color: '#111111', border: 'none',
+                padding: '0 6px', outline: 'none', fontSize: 14, minWidth: 0,
               }}
             />
             <button
               type="submit" data-guider="guider-send"
               disabled={!input.trim() || busy || agentRunning}
               style={{
-                background: accent, color: '#0e1118', border: 'none',
-                borderRadius: 8, padding: '0 14px', fontWeight: 700, cursor: 'pointer',
+                background: '#111111', color: '#ffffff', border: 'none',
+                borderRadius: 999, padding: '0 14px', height: 36, fontWeight: 700, cursor: 'pointer',
                 opacity: (!input.trim() || busy || agentRunning) ? 0.5 : 1,
               }}
-            >Send</button>
+            >Go</button>
+            <button
+              type="button"
+              data-guider="guider-close"
+              onClick={() => setOpen(false)}
+              aria-label="Close Guider"
+              style={{
+                background: 'transparent', color: '#6b7280', border: 'none', cursor: 'pointer',
+                width: 28, height: 28, borderRadius: '50%', fontSize: 16, flex: '0 0 auto',
+              }}
+            >×</button>
           </form>
         </div>
       )}

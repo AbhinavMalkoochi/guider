@@ -1,0 +1,22 @@
+{
+  "name": "guider-saas-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Convex backend for Guider planning, transcription, and install stats.",
+  "scripts": {
+    "dev": "npx convex dev",
+    "deploy": "npx convex deploy",
+    "codegen": "npx convex codegen"
+  },
+  "keywords": [
+    "convex",
+    "openai",
+    "backend"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "convex": "^1.36.1",
+    "openai": "^6.34.0"
+  }
+}

@@ -15,6 +15,7 @@ const shared = {
   loader: { '.js': 'jsx', '.jsx': 'jsx' },
   external: ['react', 'react-dom', 'react/jsx-runtime', 'html2canvas'],
   logLevel: 'info',
+  banner: { js: '"use client";' },
 };
 
 await Promise.all([
