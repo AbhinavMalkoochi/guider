@@ -1,23 +1,76 @@
 import * as React from 'react';
 
+export interface SelectorCandidate {
+  kind: 'data-guider' | 'testid' | 'aria' | 'role-name' | 'text' | 'css';
+  value?: string;
+  role?: string;
+  name?: string;
+  tag?: string;
+}
+
+export interface PlanStep {
+  title: string;
+  body?: string;
+  selectors: SelectorCandidate[];
+  visualHint?: string;
+  expectedRoute?: string | null;
+  action?:
+    | { kind: 'click' }
+    | { kind: 'type'; value: string; clear?: boolean }
+    | { kind: 'select'; value: string }
+    | { kind: 'press'; key: string };
+  value?: string;
+}
+
+export interface Plan {
+  steps: PlanStep[];
+  confidence: 'high' | 'medium' | 'low';
+  fallbackMessage: string | null;
+}
+
 export interface GuiderWidgetProps {
-  apiKey: string;
+  /** OpenAI API key (dev). For production prefer `proxyUrl`. */
+  apiKey?: string;
+  /** Path or URL to your generated guider.map.json */
   mapUrl?: string;
+  /** Or pass the parsed map object directly */
   map?: object;
+  /** Override OpenAI model (default: 'gpt-5-nano-2025-08-07') */
   model?: string;
+  /** Override OpenAI chat completions URL */
   endpoint?: string;
-  whisperEndpoint?: string;
+  /** Server-proxy plan endpoint (SSE). When set, `apiKey` is not needed. */
+  proxyUrl?: string;
+  /** Server-proxy whisper endpoint. When set, voice goes through your server. */
+  whisperUrl?: string;
+  /** Override route detection (defaults to window.location.pathname) */
   currentRoute?: string;
+  /** Launcher position */
   position?: 'bottom-right' | 'bottom-left';
+  /** Hex accent color (default: '#f5d042') */
   accent?: string;
-  onAgentMode?: () => void;
+  /** Show the Agent Mode toggle (default: true) */
+  agent?: boolean;
+  /** Greeting copy in the empty panel */
+  greeting?: string;
 }
 
 export const GuiderWidget: React.FC<GuiderWidgetProps>;
+export const GuiderProvider: React.FC<{ children: React.ReactNode; value?: any }>;
+export function useGuider(): any;
+
 export const agentMode: {
   available: boolean;
-  run: (args: { plan: object; controls?: { abort?: AbortController } }) => Promise<{
-    status: 'completed' | 'failed' | 'aborted';
-    steps: object[];
-  }>;
+  run(args: {
+    plan: Plan;
+    onProgress?: (event: {
+      phase: 'starting' | 'completed' | 'failed';
+      index: number;
+      step: PlanStep;
+      action?: string;
+      error?: string;
+    }) => void;
+    signal?: AbortSignal;
+    showHighlight?: boolean;
+  }): Promise<{ status: 'completed' | 'failed' | 'aborted'; steps: any[]; reason?: string; failedStep?: number }>;
 };

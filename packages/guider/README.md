@@ -1,6 +1,6 @@
 # Guider
 
-> **AI-powered navigation SDK for Next.js apps.** Drop in a CLI + a single React component and your users can ask "where do I update my billing email?" — Guider points them to the exact element to click, with a visible highlight and arrow.
+> **AI-powered navigation SDK for Next.js apps.** Drop in a CLI + a single React component and your users can ask "where do I update my billing email?" — Guider points them to the exact element to click, with a visible highlight and arrow. Optional Agent Mode actually clicks for them.
 
 ```bash
 npx guider init                                # scan codebase → guider.map.json
@@ -15,10 +15,7 @@ export default function RootLayout({ children }) {
   return (
     <html><body>
       {children}
-      <GuiderWidget
-        mapUrl="/guider.map.json"
-        apiKey={process.env.NEXT_PUBLIC_OPENAI_KEY}
-      />
+      <GuiderWidget mapUrl="/guider.map.json" proxyUrl="/api/guider/plan" />
     </body></html>
   );
 }
@@ -28,23 +25,63 @@ That's it.
 
 ---
 
-## How it works
+## What ships
 
-| Stage | What it does |
+| | |
 |---|---|
-| **CLI scan** | Discovers every route in `pages/` and `app/`. Parses each entry plus locally-imported components via Babel AST. Extracts every interactive element (buttons, links, modals, forms, dropdowns, tabs), every visual element (tables, charts, cards, badges, empty states), every conditional render (admin-only, plan-gated, etc.), and the full inbound/outbound link graph. |
-| **LLM enrichment** | Sends the extracted JSON for each page to OpenAI with a strict schema. The LLM returns user-facing purpose, summary, semantic categories (`billing`, `team`, `permissions`, `api-keys`, `integrations`, `security`, `notifications`, `onboarding`, `settings`, `analytics`), per-element `purpose` + `outcome`, and modal/dropdown deep-mapping. Static + LLM together — neither alone is sufficient. |
-| **Verification UI** | Terminal walks you through every page: accept, edit, or skip. Confidence is colored. Nothing publishes until you confirm. |
-| **Codemod** | `guider inject` adds stable `data-guider="…"` IDs onto nav items, modal triggers, settings sections, primary CTAs, tabs, and dropdowns so the widget can find them reliably. |
-| **Sync** | `guider sync` diffs your codebase against the existing map and re-enriches only what changed. Map stays fresh on every redeploy. |
-| **Widget — query time** | User asks (typed or via Whisper voice). The widget snaps a fresh JPEG of the current viewport, sends it + the map + the question to OpenAI vision. |
-| **Plan & highlight** | LLM returns step-by-step instructions with ranked selector candidates per step (data-guider → testid → aria → role+name → text → CSS) plus a visual hint. The widget finds the element, scrolls it into view, dims the rest of the page, and draws a glowing ring + arrow + tooltip. Step-by-step, confirmed. |
-| **Selector fallback** | If selectors miss, the widget switches to the visual hint and tells the user verbatim how to find the element on screen. Never silent failure. |
-| **Agent mode** | Scaffold only — a future release will execute the steps automatically. The hook-in points are in `src/agent/index.js`. |
+| **CLI** (`init` / `sync` / `inject`) | Babel-AST scanner + LLM enrichment + terminal verification |
+| **Widget** (`<GuiderWidget />`) | 47 KB ESM bundle, voice + chat, fresh-screenshot vision, ranked selector resolution, glowing highlight overlay, full a11y |
+| **Agent Mode** | DOM-level click/type/select/keyboard with React-native-value-setter for controlled inputs, MutationObserver settle detection, route-change waits |
+| **Server proxy** | 100 lines of Node Express that hides your OpenAI key, streams plans via SSE, proxies Whisper |
 
 ---
 
-## CLI
+## How the scanner works
+
+| Stage | What it does |
+|---|---|
+| **Discovery** | Finds every route in `pages/`, `src/pages/`, `app/`, `src/app/`. Handles route groups `(group)`, dynamic `[id]`, catch-all `[...slug]`, optional `[[...slug]]`, parallel routes (skipped). |
+| **AST extraction** | Babel-parses each entry + locally-imported components (4 levels deep, type-only imports skipped, barrel re-exports followed). Extracts every interactive element (button, link, form, dropdown, modal/dialog/sheet/popover/menu Triggers, tab, input, switch), every visual element (table, chart, card, badge, counter, empty-state, image), every conditional render. |
+| **Handler tracing** | When `<Button onClick={handleSave}>` references a local function, looks it up and reads its body to infer the user-facing outcome — `router.push('/x')` → "navigates to /x"; `setIsOpen(true)` → "opens a dialog"; `fetch('/api/y')` → "calls /api/y"; `mutation.mutate()` → "submits a server action". |
+| **Categorization** | Auto-tags pages with semantic categories: `billing`, `usage`, `team`, `permissions`, `api-keys`, `integrations`, `security`, `notifications`, `onboarding`, `settings`, `analytics`. |
+| **Link graph** | Builds inbound + outbound link graph (resolves dynamic routes, strips query/hash). |
+| **LLM enrichment** | Sends each page's extracted JSON to OpenAI with a strict schema. The LLM returns user-facing `purpose`, `summary`, per-element `outcome`, modal/dropdown deep-mapping, `confidence` (high/medium/low). |
+| **Verification TUI** | Walks every page in your terminal: accept, edit, skip, or quit-and-accept-rest. Confidence is colored. Nothing publishes until you confirm. |
+
+`guider sync` diffs the codebase against the existing map (hashing only static fields so LLM enrichments aren't lost) and re-enriches only changed pages.
+
+`guider inject` is an idempotent jscodeshift codemod that adds stable `data-guider="…"` IDs to nav items, modal/sheet/popover/dialog triggers, primary CTAs, tabs, forms — so the widget can find them under any class-name shuffle.
+
+---
+
+## How the widget works
+
+1. User asks (typed or via Whisper voice).
+2. The widget snaps a fresh JPEG of the current viewport (`html2canvas`, lazy-imported on first ask).
+3. It sends `{ question, currentRoute, screenshot, mapVersion }` to your proxy (or directly to OpenAI in dev).
+4. The proxy streams a plan back as Server-Sent Events. **The first highlight appears the moment step 0 arrives** — the rest stream in.
+5. Each step has ranked selector candidates: `data-guider` → `data-testid` → `aria-label` → `role+name` → text content → CSS. The widget tries them in order, validating visibility.
+6. On match: scroll into view, dim the page, draw a glowing ring + arrow + tooltip with step counter. User confirms each step.
+7. On selector miss: the widget falls back to the LLM's `visualHint` ("Look for the orange button at the top right") instead of pointing at the wrong thing.
+8. On low confidence: the widget says so plainly instead of guessing.
+
+### Agent Mode
+
+Toggle the **agent** chip in the panel and the widget *executes* the plan instead of asking the user to click each step.
+
+How it interacts with the DOM:
+
+- **Click** — full pointer + mouse sequence (`pointerover` → `mouseover` → `pointerdown` → `mousedown` → focus → `pointerup` → `mouseup` → native `el.click()`). Most React/Vue/Svelte handlers fire because root-level event delegation listens for bubbled native events.
+- **Type** — calls the prototype's value setter directly to bypass React's controlled-input cache, then dispatches `input` (with `composed: true`) and `change`.
+- **Select** — same native-value-setter trick on `<select>`.
+- **Press** — full `keydown` / `keypress` / `keyup` sequence.
+- **Wait** — `MutationObserver`-based DOM-quiescence + route change watcher. Each step waits for the page to settle before moving on.
+
+**Limit**: dispatched events have `isTrusted: false`. APIs gated on user-activation (clipboard write, fullscreen, file picker) won't fire. The agent reports this instead of failing silently.
+
+---
+
+## CLI reference
 
 ```
 guider init     [--cwd .] [--out guider.map.json] [--no-llm] [--no-verify] [--dry-run]
@@ -56,39 +93,7 @@ guider sync     [--cwd .] [--map guider.map.json] [--no-llm]
 guider inject   [--cwd .] [--dry-run]
 ```
 
-Set `OPENAI_API_KEY` in your shell or pass `--api-key`. Without a key, the scanner still emits a static-only map (no semantic enrichment).
-
-### Map schema (excerpt)
-
-```json
-{
-  "version": "0.1",
-  "generatedAt": "...",
-  "pages": [
-    {
-      "route": "/team",
-      "file": "pages/team.jsx",
-      "purpose": "Manage who's on your team and what they can access.",
-      "summary": "Lists members, lets admins invite, change roles, or remove. Shows seat usage.",
-      "categories": ["team", "permissions"],
-      "interactive": [
-        { "label": "Invite member", "type": "link", "purpose": "Open the invite flow",
-          "outcome": "Goes to /team/invite", "visibleWhen": null }
-      ],
-      "visuals": [
-        { "kind": "table", "label": "Team members table",
-          "describes": "Rows of teammates with name, role, last active, and actions" }
-      ],
-      "modals":   [{ "trigger": "Manage seats", "purpose": "...", "actions": ["Add seat", "Remove seat"] }],
-      "dropdowns":[{ "trigger": "Role", "items": ["Admin", "Editor", "Viewer"] }],
-      "conditions":[{ "tag": "button", "condition": "subscription.plan === \"pro\"" }],
-      "linkedFrom": ["/", "/dashboard"],
-      "links": ["/team/invite", "/billing"],
-      "confidence": "high"
-    }
-  ]
-}
-```
+Set `OPENAI_API_KEY` in your shell or pass `--api-key`. Without a key, the scanner emits a static-only map (no LLM enrichment).
 
 ---
 
@@ -96,31 +101,39 @@ Set `OPENAI_API_KEY` in your shell or pass `--api-key`. Without a key, the scann
 
 | Prop | Required | Description |
 |---|---|---|
-| `apiKey` | yes | OpenAI API key. For production, prefer routing through your own proxy. |
-| `mapUrl` _or_ `map` | yes | URL to fetch `guider.map.json`, or the parsed object. |
-| `model` | – | Defaults to `gpt-5-nano-2025-08-07`. |
-| `endpoint` | – | Override OpenAI chat completions URL (use a proxy). |
-| `whisperEndpoint` | – | Override Whisper URL (use a proxy). |
-| `currentRoute` | – | Override route detection. Defaults to `window.location.pathname`. |
+| `mapUrl` _or_ `map` | yes | URL to fetch your generated map, or the parsed object. |
+| `proxyUrl` | one of | Path/URL to your server proxy plan endpoint (SSE). Recommended for production. |
+| `apiKey` | one of | OpenAI API key for direct calls (dev only). |
+| `whisperUrl` | – | Path/URL to your Whisper proxy. If unset, voice calls OpenAI directly with `apiKey`. |
+| `model` | – | OpenAI model. Default `gpt-5-nano-2025-08-07`. |
+| `endpoint` | – | Override OpenAI chat completions URL. |
+| `currentRoute` | – | Defaults to `window.location.pathname`. |
 | `position` | – | `'bottom-right'` (default) or `'bottom-left'`. |
 | `accent` | – | Hex color. Default `#f5d042`. |
-| `onAgentMode` | – | Future: agent-mode toggle callback. |
+| `agent` | – | Show the Agent Mode toggle. Default `true`. |
+| `greeting` | – | Empty-state copy in the panel. |
 
 ---
 
-## Privacy & security
+## Privacy, size, accessibility
 
-- Screenshots are captured fresh at query time and sent **only** to the OpenAI endpoint you configure. They are never cached or persisted by the widget.
-- The map is served from your own origin (e.g., `/guider.map.json`) and can be cached aggressively — it only changes on redeploy.
-- The widget bundle is ~27 KB minified ESM. `html2canvas` (~50 KB gzipped) is **lazy-imported** the first time a question is asked.
-- All highlight overlays are removed on widget close, step completion, or unmount — guaranteed.
-- For production, route widget calls through a server proxy so `apiKey` never reaches the browser.
+- **Bundle**: 47 KB widget (ESM, gzipped less). `html2canvas` (~50 KB gz) is **lazy-imported** the first time a question is asked. React/ReactDOM are peer deps.
+- **Screenshots** are captured fresh per query and sent only to the endpoint you configure. Never cached, never persisted by the widget.
+- **Server proxy** ([`examples/server-proxy/`](./examples/server-proxy/)) keeps your API key out of the browser, streams plans via SSE, and proxies Whisper.
+- **Map** is served from your origin (`/guider.map.json`). Cache aggressively — it only changes on redeploy.
+- **Cleanup** is guaranteed on widget close, step completion, and unmount — every overlay, every listener, the global keydown handler.
+- **Accessibility**:
+  - Panel is `role=dialog` with focus-trap + Escape-to-close.
+  - Live region announces assistant messages and step changes.
+  - Highlight tooltip is a focused `role=dialog` with screen-reader-readable step counter, Enter advances, Escape skips.
+  - Respects `prefers-reduced-motion` (no pulse, instant scroll) and `prefers-contrast: more` (black/white tooltip).
+  - Every interactive element has `aria-label`, `aria-pressed`, `aria-expanded`, `aria-controls` as appropriate.
 
 ---
 
 ## Roadmap
 
-- Agent mode (auto-execute steps)
-- WebSocket streaming of step plans
+- Auto-replan on agent divergence (re-screenshot when an unexpected route arrives)
 - Per-tenant maps for multi-tenant SaaS
-- Map signing + integrity check at load time
+- Map signing + integrity check at widget load
+- Chrome extension build for trusted-event clicks (full clipboard/fullscreen support)

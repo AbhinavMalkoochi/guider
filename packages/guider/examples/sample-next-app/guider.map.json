@@ -1,0 +1,744 @@
+{
+  "version": "0.1",
+  "generatedAt": "2026-04-27T01:40:32.437Z",
+  "project": "sample-next-app",
+  "pages": [
+    {
+      "route": "/",
+      "file": "app/(marketing)/page.tsx",
+      "router": "app",
+      "categories": [
+        "billing",
+        "analytics"
+      ],
+      "interactive": [
+        {
+          "tag": "Link",
+          "label": "Open dashboard",
+          "href": "/dashboard",
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "navigates to /dashboard",
+          "type": "link"
+        },
+        {
+          "tag": "Link",
+          "label": "See pricing",
+          "href": "/pricing",
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "navigates to /pricing",
+          "type": "link"
+        }
+      ],
+      "visuals": [],
+      "links": [
+        "/dashboard",
+        "/pricing"
+      ],
+      "conditions": [],
+      "sourceFiles": [
+        "app/(marketing)/page.tsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/billing",
+      "file": "pages/billing.jsx",
+      "router": "pages",
+      "categories": [
+        "billing"
+      ],
+      "interactive": [
+        {
+          "tag": "Link",
+          "label": "View invoices",
+          "href": "/billing/invoices",
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "navigates to /billing/invoices",
+          "type": "link"
+        },
+        {
+          "tag": "button",
+          "label": "Update payment method",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Upgrade plan",
+          "href": null,
+          "testId": "upgrade-plan-btn",
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [],
+      "links": [
+        "/billing/invoices"
+      ],
+      "conditions": [],
+      "sourceFiles": [
+        "pages/billing.jsx"
+      ],
+      "linkedFrom": [
+        "/billing/:tab",
+        "/dashboard"
+      ]
+    },
+    {
+      "route": "/billing/:tab",
+      "file": "app/billing/[tab]/page.tsx",
+      "router": "app",
+      "categories": [
+        "billing"
+      ],
+      "interactive": [
+        {
+          "tag": "Link",
+          "label": "Overview",
+          "href": "/billing",
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "navigates to /billing",
+          "type": "link"
+        },
+        {
+          "tag": "Link",
+          "label": "Invoices",
+          "href": "/billing/invoices",
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "navigates to /billing/invoices",
+          "type": "link"
+        },
+        {
+          "tag": "Link",
+          "label": "Upgrade",
+          "href": "/billing/upgrade",
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "navigates to /billing/upgrade",
+          "type": "link"
+        },
+        {
+          "tag": "button",
+          "label": "Cancel subscription",
+          "href": null,
+          "testId": "cancel-subscription",
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [
+        {
+          "tag": "Badge",
+          "label": "Pro",
+          "kind": "badge"
+        }
+      ],
+      "links": [
+        "/billing",
+        "/billing/invoices",
+        "/billing/upgrade"
+      ],
+      "conditions": [
+        {
+          "tag": "Badge",
+          "condition": "subscription.plan === \"pro\""
+        }
+      ],
+      "sourceFiles": [
+        "app/billing/[tab]/page.tsx"
+      ],
+      "linkedFrom": [
+        "/billing",
+        "/billing/:tab",
+        "/dashboard"
+      ]
+    },
+    {
+      "route": "/dashboard",
+      "file": "app/dashboard/page.tsx",
+      "router": "app",
+      "categories": [
+        "billing",
+        "usage",
+        "team",
+        "permissions",
+        "notifications",
+        "settings",
+        "analytics"
+      ],
+      "interactive": [
+        {
+          "tag": "Link",
+          "label": "Billing",
+          "href": "/billing",
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "navigates to /billing",
+          "type": "link"
+        },
+        {
+          "tag": "Link",
+          "label": "Team",
+          "href": "/team",
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "navigates to /team",
+          "type": "link"
+        },
+        {
+          "tag": "Link",
+          "label": "Settings",
+          "href": "/settings",
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "navigates to /settings",
+          "type": "link"
+        },
+        {
+          "tag": "TabsTrigger",
+          "label": "Overview",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "tab"
+        },
+        {
+          "tag": "TabsTrigger",
+          "label": "Members",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "tab"
+        },
+        {
+          "tag": "TabsTrigger",
+          "label": "Usage",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "tab"
+        },
+        {
+          "tag": "button",
+          "label": "Upgrade plan",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "navigates to /billing/upgrade",
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Export data",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "calls /api/export",
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Admin",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": "Open admin panel",
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "navigates to /admin",
+          "type": "button"
+        },
+        {
+          "tag": "Dialog.Trigger",
+          "label": "Invite teammate",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Invite teammate",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "form",
+          "label": "Admin Editor Viewer Send invite Cancel",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "closes a dialog",
+          "type": "form"
+        },
+        {
+          "tag": "input",
+          "label": "Email",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": "Email",
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "input"
+        },
+        {
+          "tag": "select",
+          "label": "Admin Editor Viewer",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": "Role",
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "input"
+        },
+        {
+          "tag": "option",
+          "label": "Admin",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "option",
+          "label": "Editor",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "option",
+          "label": "Viewer",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Send invite",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Cancel",
+          "href": null,
+          "testId": null,
+          "guiderId": null,
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "closes a dialog",
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Remove",
+          "href": null,
+          "testId": null,
+          "guiderId": "teamtable-el-0",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Change role",
+          "href": null,
+          "testId": null,
+          "guiderId": "teamtable-el-1",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [
+        {
+          "tag": "table",
+          "label": "Name Role Actions Alice Admin Remove Change role",
+          "kind": "table"
+        }
+      ],
+      "links": [
+        "/billing",
+        "/team",
+        "/settings",
+        "/billing/upgrade",
+        "/admin"
+      ],
+      "conditions": [
+        {
+          "tag": "button",
+          "condition": "user.role === \"admin\""
+        }
+      ],
+      "sourceFiles": [
+        "app/dashboard/page.tsx",
+        "components/InviteDialog.jsx",
+        "components/TeamTable.jsx"
+      ],
+      "linkedFrom": [
+        "/"
+      ]
+    },
+    {
+      "route": "/settings/api-keys",
+      "file": "pages/settings/api-keys.jsx",
+      "router": "pages",
+      "categories": [
+        "api-keys",
+        "settings"
+      ],
+      "interactive": [
+        {
+          "tag": "button",
+          "label": "Create new key",
+          "href": null,
+          "testId": null,
+          "guiderId": "api-keys-el-0",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Revoke",
+          "href": null,
+          "testId": null,
+          "guiderId": "api-keys-el-1",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [
+        {
+          "tag": "table",
+          "label": "Name Created prod 2025-01-02 Revoke",
+          "kind": "table"
+        }
+      ],
+      "links": [],
+      "conditions": [],
+      "sourceFiles": [
+        "pages/settings/api-keys.jsx"
+      ],
+      "linkedFrom": []
+    },
+    {
+      "route": "/team",
+      "file": "pages/team.jsx",
+      "router": "pages",
+      "categories": [
+        "team",
+        "permissions",
+        "security"
+      ],
+      "interactive": [
+        {
+          "tag": "Link",
+          "label": "Invite member",
+          "href": "/team/invite",
+          "testId": null,
+          "guiderId": "team-team-invite",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": "navigates to /team/invite",
+          "type": "link"
+        },
+        {
+          "tag": "button",
+          "label": "Manage seats",
+          "href": null,
+          "testId": null,
+          "guiderId": "team-open-billing-modal",
+          "aria": {
+            "label": "open-billing-modal",
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Add SSO",
+          "href": null,
+          "testId": null,
+          "guiderId": "team-el-2",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Remove",
+          "href": null,
+          "testId": null,
+          "guiderId": "teamtable-el-0",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        },
+        {
+          "tag": "button",
+          "label": "Change role",
+          "href": null,
+          "testId": null,
+          "guiderId": "teamtable-el-1",
+          "aria": {
+            "label": null,
+            "role": null,
+            "describedby": null,
+            "controls": null
+          },
+          "outcome": null,
+          "type": "button"
+        }
+      ],
+      "visuals": [
+        {
+          "tag": "table",
+          "label": "Name Role Actions Alice Admin Remove Change role",
+          "kind": "table"
+        }
+      ],
+      "links": [
+        "/team/invite"
+      ],
+      "conditions": [
+        {
+          "tag": "button",
+          "condition": "subscription.plan === \"pro\""
+        }
+      ],
+      "sourceFiles": [
+        "pages/team.jsx",
+        "components/TeamTable.jsx"
+      ],
+      "linkedFrom": [
+        "/dashboard"
+      ]
+    }
+  ]
+}

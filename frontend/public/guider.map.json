@@ -1,0 +1,54 @@
+{
+  "version": "0.1",
+  "generatedAt": "2026-01-27T00:00:00Z",
+  "project": "guider-site",
+  "pages": [
+    {
+      "route": "/",
+      "file": "src/App.js",
+      "router": "spa",
+      "purpose": "The Guider product landing page with embedded live demo, install instructions, FAQ, and the Guider widget itself running in the corner.",
+      "summary": "A dark, serif-headline landing page. Hero promises an AI tour guide. Sections: How (3 cards), Install (tabbed code blocks), Demo (interactive Settings/Team/Billing/API-keys app), Privacy, FAQ, Footer. The Guider widget is pinned bottom-right.",
+      "categories": ["onboarding", "team", "billing", "api-keys", "settings"],
+      "interactive": [
+        { "label": "How", "type": "link", "purpose": "Jump to How it works", "outcome": "scrolls to the How section", "selector": "[data-guider=nav-how]" },
+        { "label": "Install", "type": "link", "purpose": "Jump to install snippet", "outcome": "scrolls to install", "selector": "[data-guider=nav-install]" },
+        { "label": "Demo", "type": "link", "purpose": "Jump to live demo", "outcome": "scrolls to demo", "selector": "[data-guider=nav-demo]" },
+        { "label": "FAQ", "type": "link", "purpose": "Jump to FAQ", "outcome": "scrolls to FAQ", "selector": "[data-guider=nav-faq]" },
+        { "label": "GitHub", "type": "link", "purpose": "Open GitHub repo", "outcome": "opens external GitHub", "selector": "[data-guider=nav-github]" },
+        { "label": "Install (hero)", "type": "link", "purpose": "Hero install CTA", "outcome": "scrolls to install", "selector": "[data-guider=hero-install]" },
+        { "label": "Try the live demo", "type": "link", "purpose": "Hero demo CTA", "outcome": "scrolls to demo", "selector": "[data-guider=hero-try]" },
+        { "label": "Get started", "type": "tab", "purpose": "Show install steps", "outcome": "shows getting-started snippet", "selector": "[data-guider=tab-install]" },
+        { "label": "guider sync", "type": "tab", "purpose": "Show sync command", "outcome": "shows sync snippet", "selector": "[data-guider=tab-sync]" },
+        { "label": "Server proxy", "type": "tab", "purpose": "Show proxy snippet", "outcome": "shows proxy snippet", "selector": "[data-guider=tab-proxy]" },
+        { "label": "copy", "type": "button", "purpose": "Copy code to clipboard", "outcome": "copies the snippet", "selector": "[data-guider=code-copy]" },
+        { "label": "Overview (demo sidebar)", "type": "button", "purpose": "Show Overview tab in the demo app", "outcome": "displays KPIs and an Upgrade plan button", "selector": "[data-guider=demo-overview]" },
+        { "label": "Team (demo sidebar)", "type": "button", "purpose": "Show Team tab in the demo app", "outcome": "displays the team members table and Invite teammate button", "selector": "[data-guider=demo-team]" },
+        { "label": "Billing (demo sidebar)", "type": "button", "purpose": "Show Billing tab in the demo app", "outcome": "displays Update payment method, View invoices, Cancel subscription buttons", "selector": "[data-guider=demo-billing]" },
+        { "label": "API keys (demo sidebar)", "type": "button", "purpose": "Show API keys tab in the demo app", "outcome": "displays the API keys table and Create new key button", "selector": "[data-guider=demo-apikeys]" },
+        { "label": "Upgrade plan (Overview)", "type": "button", "purpose": "Upgrade your plan", "outcome": "demo-only — would navigate to billing/upgrade", "selector": "[data-guider=demo-upgrade-cta]", "visibleWhen": "demo Overview tab is active" },
+        { "label": "Invite teammate", "type": "modal-trigger", "purpose": "Open the Invite teammate dialog", "outcome": "opens a modal with email input, role select, Send/Cancel buttons", "selector": "[data-guider=invite-teammate-btn]", "visibleWhen": "demo Team tab is active" },
+        { "label": "Email (invite dialog)", "type": "input", "purpose": "Type the teammate's email", "outcome": "captures the email to invite", "selector": "[data-guider=invite-email-input]", "visibleWhen": "Invite teammate dialog is open" },
+        { "label": "Role (invite dialog)", "type": "input", "purpose": "Pick the teammate's role", "outcome": "Admin / Editor / Viewer", "selector": "[data-guider=invite-role-select]", "visibleWhen": "Invite teammate dialog is open" },
+        { "label": "Send invite", "type": "button", "purpose": "Submit the invite", "outcome": "sends invite and closes the dialog", "selector": "[data-guider=invite-send]", "visibleWhen": "Invite teammate dialog is open" },
+        { "label": "Cancel (invite dialog)", "type": "button", "purpose": "Close the invite dialog without sending", "outcome": "closes the dialog", "selector": "[data-guider=invite-cancel]", "visibleWhen": "Invite teammate dialog is open" },
+        { "label": "Update payment method", "type": "button", "purpose": "Update the credit card on file", "outcome": "demo-only — would open card form", "selector": "[data-guider=update-payment-method]", "visibleWhen": "demo Billing tab is active" },
+        { "label": "View invoices", "type": "button", "purpose": "See past invoices", "outcome": "demo-only — would open invoice list", "selector": "[data-guider=view-invoices]", "visibleWhen": "demo Billing tab is active" },
+        { "label": "Cancel subscription", "type": "button", "purpose": "Cancel the active subscription", "outcome": "demo-only — would open cancellation flow", "selector": "[data-guider=cancel-subscription]", "visibleWhen": "demo Billing tab is active" },
+        { "label": "Create new key", "type": "button", "purpose": "Generate a new API key", "outcome": "demo-only — would create a new key row", "selector": "[data-guider=create-api-key]", "visibleWhen": "demo API keys tab is active" }
+      ],
+      "visuals": [
+        { "kind": "table", "label": "Team members table", "describes": "Rows of teammates with name, role, last active, manage action", "visibleWhen": "demo Team tab is active" },
+        { "kind": "table", "label": "API keys table", "describes": "Rows of keys with name, created date, revoke action", "visibleWhen": "demo API keys tab is active" },
+        { "kind": "card", "label": "KPI cards", "describes": "Plan / seats / API calls counters" }
+      ],
+      "modals": [
+        { "trigger": "Invite teammate", "purpose": "Invite a teammate by email + role", "actions": ["Type email", "Select role", "Send invite", "Cancel"] }
+      ],
+      "linkedFrom": [],
+      "links": [],
+      "conditions": [],
+      "confidence": "high"
+    }
+  ]
+}

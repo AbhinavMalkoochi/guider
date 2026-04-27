@@ -25,31 +25,32 @@ await Promise.all([
 ]);
 
 // Hand-written .d.ts (small surface area)
-import { writeFile } from 'node:fs/promises';
-const dts = `import * as React from 'react';
-
+import { writeFile, readFile } from 'node:fs/promises';
+const dtsPath = path.join(root, 'dist/widget.d.ts');
+let dts;
+try {
+  // Preserve the curated d.ts authored by hand if it exists already.
+  dts = await readFile(dtsPath, 'utf8');
+} catch {
+  dts = `import * as React from 'react';
 export interface GuiderWidgetProps {
-  apiKey: string;
+  apiKey?: string;
   mapUrl?: string;
   map?: object;
+  proxyUrl?: string;
+  whisperUrl?: string;
   model?: string;
   endpoint?: string;
-  whisperEndpoint?: string;
   currentRoute?: string;
   position?: 'bottom-right' | 'bottom-left';
   accent?: string;
-  onAgentMode?: () => void;
+  agent?: boolean;
+  greeting?: string;
 }
-
 export const GuiderWidget: React.FC<GuiderWidgetProps>;
-export const agentMode: {
-  available: boolean;
-  run: (args: { plan: object; controls?: { abort?: AbortController } }) => Promise<{
-    status: 'completed' | 'failed' | 'aborted';
-    steps: object[];
-  }>;
-};
+export const agentMode: { available: boolean; run: (args: any) => Promise<any> };
 `;
-await writeFile(path.join(root, 'dist/widget.d.ts'), dts);
+}
+await writeFile(dtsPath, dts);
 
 console.log('✓ Built dist/');
