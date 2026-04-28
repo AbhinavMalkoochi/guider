@@ -1535,6 +1535,535 @@ function parseSse(raw) {
   return data ? { event, data } : null;
 }
 
+// src/widget/GuiderWidget.jsx
+import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+function GuiderWidget({
+  apiKey,
+  mapUrl,
+  map: mapProp,
+  model,
+  endpoint,
+  whisperUrl,
+  proxyUrl,
+  currentRoute,
+  accent = "#3080ff",
+  speak = true
+}) {
+  const [map, setMap] = useState(mapProp || null);
+  const [busy, setBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [cursor, setCursor] = useState(() => ({ x: 28, y: 28 }));
+  const [statusText, setStatusText] = useState("");
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeValue, setComposeValue] = useState("");
+  const recorderRef = useRef(null);
+  const liveRef = useRef(null);
+  const abortRef = useRef(null);
+  const speechRef = useRef(null);
+  const statusTimerRef = useRef(null);
+  const composeInputRef = useRef(null);
+  useEffect(() => {
+    if (mapProp) {
+      setMap(mapProp);
+      return;
+    }
+    if (!mapUrl) return;
+    let cancelled = false;
+    fetch(mapUrl).then((response) => response.ok ? response.json() : null).then((json) => {
+      if (!cancelled) setMap(json);
+    }).catch(() => {
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mapProp, mapUrl]);
+  useEffect(() => () => {
+    var _a;
+    cleanup();
+    (_a = abortRef.current) == null ? void 0 : _a.abort();
+    stopSpeaking();
+    clearStatus(statusTimerRef);
+  }, []);
+  useEffect(() => {
+    let frame = 0;
+    const onMove = (event) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        setCursor({ x: event.clientX, y: event.clientY });
+      });
+    };
+    document.addEventListener("mousemove", onMove, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("mousemove", onMove, true);
+    };
+  }, []);
+  const route = currentRoute || (typeof window !== "undefined" ? window.location.pathname : "/");
+  const resolvedWhisperUrl = whisperUrl || inferWhisperUrl(proxyUrl);
+  const announce = useCallback((text, duration = 2400) => {
+    if (liveRef.current) {
+      liveRef.current.textContent = "";
+      setTimeout(() => {
+        if (liveRef.current) liveRef.current.textContent = text;
+      }, 30);
+    }
+    if (speak) speakText(text, speechRef);
+    flashStatus(text, duration, setStatusText, statusTimerRef);
+  }, [speak]);
+  const highlightStep = useCallback(async (plan, index) => {
+    var _a;
+    cleanup();
+    const step = (_a = plan == null ? void 0 : plan.steps) == null ? void 0 : _a[index];
+    if (!step) return;
+    const found = findElement(step.selectors);
+    if (!found) {
+      announce(`I couldn't find it. Look for ${step.visualHint || step.title}.`, 3200);
+      return;
+    }
+    announce([step.title, step.body, step.visualHint ? `Look for ${step.visualHint}.` : ""].filter(Boolean).join(" "), 3200);
+    await show({
+      element: found.el,
+      title: step.title,
+      body: step.body,
+      stepIndex: index,
+      totalSteps: plan.steps.length,
+      accent,
+      onNext: () => {
+        const nextIndex = index + 1;
+        if (nextIndex >= plan.steps.length) {
+          cleanup();
+          announce("Done.", 1800);
+          return;
+        }
+        highlightStep(plan, nextIndex);
+      },
+      onSkip: () => {
+        cleanup();
+        announce("Skipped.", 1600);
+      }
+    });
+  }, [accent, announce]);
+  const ask = useCallback(async (question) => {
+    var _a, _b;
+    if (!(question == null ? void 0 : question.trim())) return;
+    setBusy(true);
+    setComposeOpen(false);
+    setComposeValue("");
+    cleanup();
+    (_a = abortRef.current) == null ? void 0 : _a.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const screenshotDataUrl = await captureViewport();
+      let plan;
+      if (proxyUrl) {
+        const streamedSteps = [];
+        plan = await streamPlanGuidance({
+          question,
+          currentRoute: route,
+          map,
+          screenshotDataUrl,
+          proxyUrl,
+          signal: controller.signal,
+          onStep: (step) => {
+            streamedSteps.push(step);
+            if (streamedSteps.length === 1) {
+              highlightStep({ steps: streamedSteps }, 0);
+            }
+          }
+        });
+      } else {
+        plan = await planGuidance({
+          question,
+          currentRoute: route,
+          map,
+          screenshotDataUrl,
+          apiKey,
+          model,
+          endpoint,
+          signal: controller.signal
+        });
+      }
+      if (plan.confidence === "low" || !((_b = plan.steps) == null ? void 0 : _b.length)) {
+        announce(plan.fallbackMessage || "I'm not confident about where to point you.", 3200);
+        return;
+      }
+      announce(`${plan.steps.length} step${plan.steps.length > 1 ? "s" : ""} ready.`, 1800);
+      await highlightStep(plan, 0);
+    } catch (error) {
+      if ((error == null ? void 0 : error.name) !== "AbortError") {
+        announce(`Sorry \u2014 ${String((error == null ? void 0 : error.message) || error)}`, 3600);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [apiKey, endpoint, highlightStep, map, model, proxyUrl, route, announce]);
+  const openComposer = useCallback((initialValue = "") => {
+    setComposeValue(initialValue);
+    setComposeOpen(true);
+  }, []);
+  const closeComposer = useCallback(() => {
+    setComposeOpen(false);
+    setComposeValue("");
+  }, []);
+  const onMicClick = useCallback(async () => {
+    try {
+      if (!recording) {
+        const recorder2 = new VoiceRecorder();
+        await recorder2.start();
+        recorderRef.current = recorder2;
+        setRecording(true);
+        return;
+      }
+      const recorder = recorderRef.current;
+      recorderRef.current = null;
+      setRecording(false);
+      setBusy(true);
+      const blob = await recorder.stop();
+      const text = resolvedWhisperUrl ? await transcribeViaProxy(blob, resolvedWhisperUrl) : await transcribeWithWhisper(blob, apiKey);
+      if (text == null ? void 0 : text.trim()) {
+        await ask(text.trim());
+      } else {
+        announce("I didn't catch that.", 2200);
+      }
+    } catch (error) {
+      setRecording(false);
+      announce(`Voice error: ${error.message}.`, 3200);
+    } finally {
+      setBusy(false);
+    }
+  }, [apiKey, ask, recording, resolvedWhisperUrl, announce]);
+  useEffect(() => {
+    if (!composeOpen) return void 0;
+    const timer = setTimeout(() => {
+      var _a;
+      return (_a = composeInputRef.current) == null ? void 0 : _a.focus();
+    }, 30);
+    return () => clearTimeout(timer);
+  }, [composeOpen]);
+  useEffect(() => {
+    const onGlobalKey = (event) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(target.tagName))) {
+        return;
+      }
+      const modifier = event.metaKey || event.ctrlKey;
+      if (!modifier || event.altKey || event.repeat) return;
+      if (event.key.toLowerCase() !== "k") return;
+      event.preventDefault();
+      if (event.shiftKey) {
+        onMicClick();
+        return;
+      }
+      openComposer();
+    };
+    const onEscape = (event) => {
+      if (event.key === "Escape") closeComposer();
+    };
+    document.addEventListener("keydown", onGlobalKey);
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("keydown", onGlobalKey);
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [closeComposer, onMicClick, openComposer]);
+  const onComposeSubmit = (event) => {
+    event.preventDefault();
+    const question = composeValue.trim();
+    if (!question) return;
+    ask(question);
+  };
+  const chrome = getCursorChrome(cursor);
+  const activeStatus = recording ? "Listening\u2026" : busy ? "Thinking\u2026" : statusText;
+  return /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("div", { ref: liveRef, "aria-live": "polite", "aria-atomic": "true", style: { position: "absolute", clip: "rect(0 0 0 0)", clipPath: "inset(50%)", width: 1, height: 1, overflow: "hidden", whiteSpace: "nowrap" } }),
+    /* @__PURE__ */ jsxs(
+      "button",
+      {
+        type: "button",
+        "data-guider": "guider-launcher",
+        onClick: onMicClick,
+        onContextMenu: (event) => {
+          event.preventDefault();
+          openComposer();
+        },
+        "aria-label": recording ? "Stop Guider voice capture" : "Start Guider voice capture",
+        "aria-pressed": recording,
+        title: "Click to talk. Right-click or Cmd/Ctrl+K to type. Cmd/Ctrl+Shift+K starts voice.",
+        style: {
+          position: "fixed",
+          left: chrome.cursorLeft,
+          top: chrome.cursorTop,
+          zIndex: 2147483646,
+          width: 28,
+          height: 36,
+          padding: 0,
+          border: "none",
+          background: "transparent",
+          cursor: "pointer"
+        },
+        children: [
+          /* @__PURE__ */ jsx(
+            "span",
+            {
+              "aria-hidden": "true",
+              style: {
+                position: "absolute",
+                inset: 0,
+                clipPath: "polygon(0 0, 70% 55%, 46% 61%, 61% 100%, 47% 100%, 33% 66%, 0 0)",
+                background: `linear-gradient(180deg, ${hexAlpha("#dff3ff", 0.98)} 0%, ${hexAlpha("#83d0ff", 0.98)} 42%, ${hexAlpha(accent, 0.98)} 100%)`,
+                filter: `drop-shadow(0 12px 26px ${hexAlpha(accent, 0.24)})`
+              }
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "span",
+            {
+              "aria-hidden": "true",
+              style: {
+                position: "absolute",
+                left: 1,
+                top: 1,
+                width: 8,
+                height: 8,
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.9)",
+                opacity: recording ? 1 : 0.76,
+                boxShadow: recording ? `0 0 0 8px ${hexAlpha(accent, 0.12)}` : "none"
+              }
+            }
+          )
+        ]
+      }
+    ),
+    activeStatus && /* @__PURE__ */ jsx(
+      "div",
+      {
+        "data-guider": "guider-status",
+        role: "status",
+        "aria-live": "polite",
+        style: {
+          position: "fixed",
+          left: chrome.statusLeft,
+          top: chrome.statusTop,
+          zIndex: 2147483646,
+          maxWidth: 220,
+          padding: "9px 12px",
+          borderRadius: 999,
+          border: "1px solid rgba(17,17,17,0.08)",
+          background: "rgba(255,255,255,0.92)",
+          color: "#111111",
+          fontSize: 12,
+          lineHeight: 1.3,
+          boxShadow: "0 20px 44px rgba(15,23,42,.12)",
+          backdropFilter: "blur(18px)",
+          pointerEvents: "none"
+        },
+        children: activeStatus
+      }
+    ),
+    composeOpen && /* @__PURE__ */ jsx(
+      "div",
+      {
+        "data-guider": "guider-compose-backdrop",
+        onClick: (event) => {
+          if (event.target === event.currentTarget) closeComposer();
+        },
+        style: {
+          position: "fixed",
+          inset: 0,
+          zIndex: 2147483645,
+          background: "radial-gradient(circle at center, rgba(255,255,255,0.16), rgba(15,23,42,0.28))",
+          backdropFilter: "blur(12px)",
+          display: "grid",
+          placeItems: "center",
+          padding: 20
+        },
+        children: /* @__PURE__ */ jsxs(
+          "form",
+          {
+            "data-guider": "guider-compose-modal",
+            onSubmit: onComposeSubmit,
+            style: {
+              width: "min(520px, calc(100vw - 32px))",
+              background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,251,255,0.96))",
+              border: `1px solid ${hexAlpha(accent, 0.14)}`,
+              borderRadius: 28,
+              boxShadow: `0 32px 80px rgba(15,23,42,0.18), 0 0 0 1px ${hexAlpha("#ffffff", 0.5)} inset`,
+              padding: 20
+            },
+            children: [
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }, children: [
+                /* @__PURE__ */ jsxs("div", { children: [
+                  /* @__PURE__ */ jsx("div", { style: { fontSize: 11, letterSpacing: ".18em", textTransform: "uppercase", color: "#6b7280", marginBottom: 6 }, children: "Guider" }),
+                  /* @__PURE__ */ jsx("div", { style: { fontSize: 22, lineHeight: 1.1, color: "#0f172a", fontWeight: 600 }, children: "Ask where something lives" })
+                ] }),
+                /* @__PURE__ */ jsx(
+                  "button",
+                  {
+                    type: "button",
+                    onClick: closeComposer,
+                    "aria-label": "Close prompt",
+                    style: {
+                      width: 34,
+                      height: 34,
+                      borderRadius: 999,
+                      border: "1px solid rgba(15,23,42,0.08)",
+                      background: "rgba(255,255,255,0.74)",
+                      color: "#64748b",
+                      cursor: "pointer",
+                      fontSize: 16
+                    },
+                    children: "\xD7"
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsx(
+                "textarea",
+                {
+                  ref: composeInputRef,
+                  value: composeValue,
+                  onChange: (event) => setComposeValue(event.target.value),
+                  placeholder: "Invite a teammate. Open API keys. Show me billing.",
+                  rows: 4,
+                  style: {
+                    width: "100%",
+                    resize: "none",
+                    borderRadius: 20,
+                    border: `1px solid ${hexAlpha(accent, 0.16)}`,
+                    background: "rgba(255,255,255,0.92)",
+                    color: "#0f172a",
+                    padding: "16px 18px",
+                    fontSize: 15,
+                    lineHeight: 1.5,
+                    outline: "none",
+                    boxSizing: "border-box"
+                  }
+                }
+              ),
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 14 }, children: [
+                /* @__PURE__ */ jsx("div", { style: { fontSize: 12, color: "#64748b" }, children: "Press Enter to ask or click the blue cursor to use voice." }),
+                /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
+                  /* @__PURE__ */ jsx(
+                    "button",
+                    {
+                      type: "button",
+                      onClick: closeComposer,
+                      style: {
+                        height: 40,
+                        padding: "0 16px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(15,23,42,0.08)",
+                        background: "rgba(255,255,255,0.88)",
+                        color: "#64748b",
+                        cursor: "pointer",
+                        fontWeight: 600
+                      },
+                      children: "Cancel"
+                    }
+                  ),
+                  /* @__PURE__ */ jsx(
+                    "button",
+                    {
+                      type: "submit",
+                      disabled: !composeValue.trim() || busy,
+                      style: {
+                        height: 40,
+                        padding: "0 18px",
+                        borderRadius: 999,
+                        border: "none",
+                        background: `linear-gradient(135deg, ${hexAlpha("#9ad9ff", 1)} 0%, ${hexAlpha(accent, 1)} 100%)`,
+                        color: "#072033",
+                        cursor: composeValue.trim() && !busy ? "pointer" : "default",
+                        fontWeight: 700,
+                        opacity: composeValue.trim() && !busy ? 1 : 0.5,
+                        boxShadow: `0 18px 32px ${hexAlpha(accent, 0.22)}`
+                      },
+                      children: "Ask Guider"
+                    }
+                  )
+                ] })
+              ] })
+            ]
+          }
+        )
+      }
+    )
+  ] });
+}
+async function transcribeViaProxy(blob, url) {
+  const fd = new FormData();
+  fd.append("file", blob, "voice.webm");
+  const res = await fetch(url, { method: "POST", body: fd });
+  if (!res.ok) throw new Error(`Whisper proxy failed (${res.status})`);
+  const data = await res.json();
+  return data.text || "";
+}
+function hexAlpha(hex, alpha) {
+  const m = /^#?([0-9a-f]{3,8})$/i.exec(hex || "");
+  if (!m) return `rgba(48,128,255,${alpha})`;
+  let h = m[1];
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+function speakText(text, speechRef) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window) || !text) return;
+  const cleaned = String(text).replace(/\s+/g, " ").trim();
+  if (!cleaned) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(cleaned);
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+  speechRef.current = utterance;
+  window.speechSynthesis.speak(utterance);
+}
+function stopSpeaking() {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+}
+function getCursorChrome(cursor) {
+  const width = typeof window === "undefined" ? 1280 : window.innerWidth;
+  const height = typeof window === "undefined" ? 720 : window.innerHeight;
+  const cursorLeft = clamp(cursor.x - 8, 8, width - 40);
+  const cursorTop = clamp(cursor.y - 6, 8, height - 48);
+  const statusLeft = clamp(cursor.x + 34, 12, width - 232);
+  const statusTop = clamp(cursor.y + 22, 12, height - 64);
+  return { cursorLeft, cursorTop, statusLeft, statusTop };
+}
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), Math.max(min, max));
+}
+function flashStatus(text, duration, setStatusText, timerRef) {
+  setStatusText(text || "");
+  clearStatus(timerRef);
+  if (!text || !duration) return;
+  timerRef.current = setTimeout(() => {
+    setStatusText("");
+    timerRef.current = null;
+  }, duration);
+}
+function clearStatus(timerRef) {
+  if (!timerRef.current) return;
+  clearTimeout(timerRef.current);
+  timerRef.current = null;
+}
+function inferWhisperUrl(proxyUrl) {
+  if (!proxyUrl) return void 0;
+  return proxyUrl.replace(/\/api\/guider\/plan(?:\?.*)?$/, "/api/guider/transcribe");
+}
+
+// src/widget/context.js
+import React2, { createContext, useContext, useState as useState2, useCallback as useCallback2 } from "react";
+var Ctx = createContext(null);
+function GuiderProvider({ children, value }) {
+  return React2.createElement(Ctx.Provider, { value }, children);
+}
+function useGuider() {
+  return useContext(Ctx);
+}
+
 // src/agent/interact.js
 async function click(el) {
   if (!el) throw new Error("click: element is null");
@@ -1783,419 +2312,6 @@ var agentMode = {
     return runPlan(plan, { onProgress, signal, showHighlight, highlight: highlight_exports });
   }
 };
-
-// src/widget/GuiderWidget.jsx
-import { Fragment, jsx, jsxs } from "react/jsx-runtime";
-function GuiderWidget({
-  apiKey,
-  mapUrl,
-  map: mapProp,
-  model,
-  endpoint,
-  whisperUrl,
-  proxyUrl,
-  currentRoute,
-  accent = "#3080ff",
-  agent = true,
-  speak = true
-}) {
-  const [map, setMap] = useState(mapProp || null);
-  const [busy, setBusy] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [agentRunning, setAgentRunning] = useState(false);
-  const [agentEnabled, setAgentEnabled] = useState(false);
-  const [cursor, setCursor] = useState(() => ({ x: 28, y: 28 }));
-  const [statusText, setStatusText] = useState("");
-  const recorderRef = useRef(null);
-  const liveRef = useRef(null);
-  const abortRef = useRef(null);
-  const speechRef = useRef(null);
-  const statusTimerRef = useRef(null);
-  useEffect(() => {
-    if (mapProp) {
-      setMap(mapProp);
-      return;
-    }
-    if (!mapUrl) return;
-    let cancelled = false;
-    fetch(mapUrl).then((response) => response.ok ? response.json() : null).then((json) => {
-      if (!cancelled) setMap(json);
-    }).catch(() => {
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [mapProp, mapUrl]);
-  useEffect(() => () => {
-    var _a;
-    cleanup();
-    (_a = abortRef.current) == null ? void 0 : _a.abort();
-    stopSpeaking();
-    clearStatus(statusTimerRef);
-  }, []);
-  useEffect(() => {
-    let frame = 0;
-    const onMove = (event) => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        setCursor({ x: event.clientX, y: event.clientY });
-      });
-    };
-    document.addEventListener("mousemove", onMove, true);
-    return () => {
-      cancelAnimationFrame(frame);
-      document.removeEventListener("mousemove", onMove, true);
-    };
-  }, []);
-  const route = currentRoute || (typeof window !== "undefined" ? window.location.pathname : "/");
-  const announce = useCallback((text, duration = 2400) => {
-    if (liveRef.current) {
-      liveRef.current.textContent = "";
-      setTimeout(() => {
-        if (liveRef.current) liveRef.current.textContent = text;
-      }, 30);
-    }
-    if (speak) speakText(text, speechRef);
-    flashStatus(text, duration, setStatusText, statusTimerRef);
-  }, [speak]);
-  const highlightStep = useCallback(async (plan, index) => {
-    var _a;
-    cleanup();
-    const step = (_a = plan == null ? void 0 : plan.steps) == null ? void 0 : _a[index];
-    if (!step) return;
-    const found = findElement(step.selectors);
-    if (!found) {
-      announce(`I couldn't find it. Look for ${step.visualHint || step.title}.`, 3200);
-      return;
-    }
-    announce([step.title, step.body, step.visualHint ? `Look for ${step.visualHint}.` : ""].filter(Boolean).join(" "), 3200);
-    await show({
-      element: found.el,
-      title: step.title,
-      body: step.body,
-      stepIndex: index,
-      totalSteps: plan.steps.length,
-      accent,
-      onNext: () => {
-        const nextIndex = index + 1;
-        if (nextIndex >= plan.steps.length) {
-          cleanup();
-          announce("Done.", 1800);
-          return;
-        }
-        highlightStep(plan, nextIndex);
-      },
-      onSkip: () => {
-        cleanup();
-        announce("Skipped.", 1600);
-      }
-    });
-  }, [accent, announce]);
-  const runAgent = useCallback(async (plan) => {
-    setAgentRunning(true);
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const result = await agentMode.run({
-      plan,
-      signal: controller.signal,
-      showHighlight: true,
-      onProgress: ({ phase, index, step, error }) => {
-        if (phase === "completed") {
-          announce(`Step ${index + 1}: ${step.title}`, 1800);
-        } else if (phase === "failed") {
-          announce(`Stopped: ${error}`, 3200);
-        }
-      }
-    });
-    cleanup();
-    setAgentRunning(false);
-    if (result.status === "completed") {
-      announce("All done.", 2e3);
-    }
-  }, [announce]);
-  const ask = useCallback(async (question) => {
-    var _a, _b;
-    if (!(question == null ? void 0 : question.trim())) return;
-    setBusy(true);
-    cleanup();
-    (_a = abortRef.current) == null ? void 0 : _a.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    try {
-      const screenshotDataUrl = await captureViewport();
-      let plan;
-      if (proxyUrl) {
-        const streamedSteps = [];
-        plan = await streamPlanGuidance({
-          question,
-          currentRoute: route,
-          map,
-          screenshotDataUrl,
-          proxyUrl,
-          signal: controller.signal,
-          onStep: (step) => {
-            streamedSteps.push(step);
-            if (streamedSteps.length === 1 && !agentEnabled) {
-              highlightStep({ steps: streamedSteps }, 0);
-            }
-          }
-        });
-      } else {
-        plan = await planGuidance({
-          question,
-          currentRoute: route,
-          map,
-          screenshotDataUrl,
-          apiKey,
-          model,
-          endpoint,
-          signal: controller.signal
-        });
-      }
-      if (plan.confidence === "low" || !((_b = plan.steps) == null ? void 0 : _b.length)) {
-        announce(plan.fallbackMessage || "I'm not confident about where to point you.", 3200);
-        return;
-      }
-      if (agentEnabled) {
-        announce(`Running ${plan.steps.length} steps.`, 2200);
-        await runAgent(plan);
-      } else {
-        announce(`${plan.steps.length} step${plan.steps.length > 1 ? "s" : ""} ready.`, 1800);
-        await highlightStep(plan, 0);
-      }
-    } catch (error) {
-      if ((error == null ? void 0 : error.name) !== "AbortError") {
-        announce(`Sorry \u2014 ${String((error == null ? void 0 : error.message) || error)}`, 3600);
-      }
-    } finally {
-      setBusy(false);
-    }
-  }, [agentEnabled, apiKey, endpoint, highlightStep, map, model, proxyUrl, route, runAgent, announce]);
-  const requestTypedQuestion = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const response = window.prompt("Ask Guider where anything lives");
-    if (response == null ? void 0 : response.trim()) ask(response.trim());
-  }, [ask]);
-  const onMicClick = useCallback(async () => {
-    try {
-      if (!recording) {
-        const recorder2 = new VoiceRecorder();
-        await recorder2.start();
-        recorderRef.current = recorder2;
-        setRecording(true);
-        return;
-      }
-      const recorder = recorderRef.current;
-      recorderRef.current = null;
-      setRecording(false);
-      setBusy(true);
-      const blob = await recorder.stop();
-      const text = whisperUrl ? await transcribeViaProxy(blob, whisperUrl) : await transcribeWithWhisper(blob, apiKey);
-      if (text == null ? void 0 : text.trim()) {
-        await ask(text.trim());
-      } else {
-        announce("I didn't catch that.", 2200);
-      }
-    } catch (error) {
-      setRecording(false);
-      announce(`Voice error: ${error.message}.`, 3200);
-    } finally {
-      setBusy(false);
-    }
-  }, [apiKey, ask, recording, whisperUrl, announce]);
-  useEffect(() => {
-    const onGlobalKey = (event) => {
-      const target = event.target;
-      if (target instanceof HTMLElement && (target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(target.tagName))) {
-        return;
-      }
-      const modifier = event.metaKey || event.ctrlKey;
-      if (!modifier || event.altKey || event.repeat) return;
-      if (event.key.toLowerCase() !== "k") return;
-      event.preventDefault();
-      if (event.shiftKey) {
-        onMicClick();
-        return;
-      }
-      requestTypedQuestion();
-    };
-    document.addEventListener("keydown", onGlobalKey);
-    return () => document.removeEventListener("keydown", onGlobalKey);
-  }, [onMicClick, requestTypedQuestion]);
-  const chrome = getCursorChrome(cursor);
-  const activeStatus = recording ? "Listening\u2026" : busy ? "Thinking\u2026" : agentRunning ? "Guiding you\u2026" : statusText;
-  return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("div", { ref: liveRef, "aria-live": "polite", "aria-atomic": "true", style: { position: "absolute", clip: "rect(0 0 0 0)", clipPath: "inset(50%)", width: 1, height: 1, overflow: "hidden", whiteSpace: "nowrap" } }),
-    /* @__PURE__ */ jsx(
-      "button",
-      {
-        type: "button",
-        "data-guider": "guider-launcher",
-        onClick: onMicClick,
-        onContextMenu: (event) => {
-          event.preventDefault();
-          requestTypedQuestion();
-        },
-        "aria-label": recording ? "Stop Guider voice capture" : "Start Guider voice capture",
-        "aria-pressed": recording,
-        title: "Click to talk. Right-click or Cmd/Ctrl+K to type. Cmd/Ctrl+Shift+K starts voice.",
-        style: {
-          position: "fixed",
-          left: chrome.cursorLeft,
-          top: chrome.cursorTop,
-          zIndex: 2147483646,
-          width: 22,
-          height: 22,
-          padding: 0,
-          borderRadius: 999,
-          border: `1px solid ${hexAlpha(accent, 0.18)}`,
-          background: "rgba(255,255,255,0.94)",
-          boxShadow: `0 12px 28px rgba(15,23,42,.14), 0 0 0 8px ${hexAlpha(accent, 0.05)}`,
-          display: "grid",
-          placeItems: "center",
-          cursor: "pointer",
-          backdropFilter: "blur(18px)"
-        },
-        children: /* @__PURE__ */ jsx(
-          "span",
-          {
-            "aria-hidden": "true",
-            style: {
-              width: recording ? 8 : 6,
-              height: recording ? 8 : 6,
-              borderRadius: 999,
-              background: accent,
-              boxShadow: recording ? `0 0 0 6px ${hexAlpha(accent, 0.12)}` : "none"
-            }
-          }
-        )
-      }
-    ),
-    agent && /* @__PURE__ */ jsx(
-      "button",
-      {
-        type: "button",
-        "data-guider": "guider-agent-toggle",
-        onClick: () => setAgentEnabled((value) => !value),
-        "aria-pressed": agentEnabled,
-        title: agentEnabled ? "Auto guide enabled" : "Auto guide disabled",
-        style: {
-          position: "fixed",
-          left: chrome.cursorLeft + 28,
-          top: chrome.cursorTop - 2,
-          zIndex: 2147483646,
-          height: 26,
-          padding: "0 10px",
-          borderRadius: 999,
-          border: "1px solid rgba(17,17,17,0.08)",
-          background: agentEnabled ? "#111111" : "rgba(255,255,255,0.88)",
-          color: agentEnabled ? "#ffffff" : "#6b7280",
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: ".12em",
-          textTransform: "uppercase",
-          backdropFilter: "blur(18px)",
-          cursor: "pointer"
-        },
-        children: "auto"
-      }
-    ),
-    activeStatus && /* @__PURE__ */ jsx(
-      "div",
-      {
-        "data-guider": "guider-status",
-        role: "status",
-        "aria-live": "polite",
-        style: {
-          position: "fixed",
-          left: chrome.statusLeft,
-          top: chrome.statusTop,
-          zIndex: 2147483646,
-          maxWidth: 220,
-          padding: "9px 12px",
-          borderRadius: 999,
-          border: "1px solid rgba(17,17,17,0.08)",
-          background: "rgba(255,255,255,0.92)",
-          color: "#111111",
-          fontSize: 12,
-          lineHeight: 1.3,
-          boxShadow: "0 20px 44px rgba(15,23,42,.12)",
-          backdropFilter: "blur(18px)",
-          pointerEvents: "none"
-        },
-        children: activeStatus
-      }
-    )
-  ] });
-}
-async function transcribeViaProxy(blob, url) {
-  const fd = new FormData();
-  fd.append("file", blob, "voice.webm");
-  const res = await fetch(url, { method: "POST", body: fd });
-  if (!res.ok) throw new Error(`Whisper proxy failed (${res.status})`);
-  const data = await res.json();
-  return data.text || "";
-}
-function hexAlpha(hex, alpha) {
-  const m = /^#?([0-9a-f]{3,8})$/i.exec(hex || "");
-  if (!m) return `rgba(48,128,255,${alpha})`;
-  let h = m[1];
-  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
-  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-function speakText(text, speechRef) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window) || !text) return;
-  const cleaned = String(text).replace(/\s+/g, " ").trim();
-  if (!cleaned) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(cleaned);
-  utterance.rate = 1;
-  utterance.pitch = 1;
-  utterance.volume = 1;
-  speechRef.current = utterance;
-  window.speechSynthesis.speak(utterance);
-}
-function stopSpeaking() {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-}
-function getCursorChrome(cursor) {
-  const width = typeof window === "undefined" ? 1280 : window.innerWidth;
-  const height = typeof window === "undefined" ? 720 : window.innerHeight;
-  const cursorLeft = clamp(cursor.x - 11, 10, width - 32);
-  const cursorTop = clamp(cursor.y - 11, 10, height - 32);
-  const statusLeft = clamp(cursor.x + 34, 12, width - 232);
-  const statusTop = clamp(cursor.y + 22, 12, height - 64);
-  return { cursorLeft, cursorTop, statusLeft, statusTop };
-}
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), Math.max(min, max));
-}
-function flashStatus(text, duration, setStatusText, timerRef) {
-  setStatusText(text || "");
-  clearStatus(timerRef);
-  if (!text || !duration) return;
-  timerRef.current = setTimeout(() => {
-    setStatusText("");
-    timerRef.current = null;
-  }, duration);
-}
-function clearStatus(timerRef) {
-  if (!timerRef.current) return;
-  clearTimeout(timerRef.current);
-  timerRef.current = null;
-}
-
-// src/widget/context.js
-import React2, { createContext, useContext, useState as useState2, useCallback as useCallback2 } from "react";
-var Ctx = createContext(null);
-function GuiderProvider({ children, value }) {
-  return React2.createElement(Ctx.Provider, { value }, children);
-}
-function useGuider() {
-  return useContext(Ctx);
-}
 export {
   GuiderProvider,
   GuiderWidget,

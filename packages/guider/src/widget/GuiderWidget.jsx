@@ -4,7 +4,6 @@ import { VoiceRecorder, transcribeWithWhisper } from './voice.js';
 import { findElement } from './selectors.js';
 import { show as showHighlight, cleanup as cleanupHighlight } from './highlight.js';
 import { planGuidance, streamPlanGuidance } from './llm.js';
-import { agentMode } from '../agent/index.js';
 
 export function GuiderWidget({
   apiKey,
@@ -13,21 +12,21 @@ export function GuiderWidget({
   proxyUrl,
   currentRoute,
   accent = '#3080ff',
-  agent = true,
   speak = true,
 }) {
   const [map, setMap] = useState(mapProp || null);
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [agentRunning, setAgentRunning] = useState(false);
-  const [agentEnabled, setAgentEnabled] = useState(false);
   const [cursor, setCursor] = useState(() => ({ x: 28, y: 28 }));
   const [statusText, setStatusText] = useState('');
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeValue, setComposeValue] = useState('');
   const recorderRef = useRef(null);
   const liveRef = useRef(null);
   const abortRef = useRef(null);
   const speechRef = useRef(null);
   const statusTimerRef = useRef(null);
+  const composeInputRef = useRef(null);
 
   useEffect(() => {
     if (mapProp) { setMap(mapProp); return; }
@@ -63,6 +62,7 @@ export function GuiderWidget({
   }, []);
 
   const route = currentRoute || (typeof window !== 'undefined' ? window.location.pathname : '/');
+  const resolvedWhisperUrl = whisperUrl || inferWhisperUrl(proxyUrl);
 
   const announce = useCallback((text, duration = 2400) => {
     if (liveRef.current) {
@@ -109,32 +109,11 @@ export function GuiderWidget({
     });
   }, [accent, announce]);
 
-  const runAgent = useCallback(async (plan) => {
-    setAgentRunning(true);
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const result = await agentMode.run({
-      plan,
-      signal: controller.signal,
-      showHighlight: true,
-      onProgress: ({ phase, index, step, error }) => {
-        if (phase === 'completed') {
-          announce(`Step ${index + 1}: ${step.title}`, 1800);
-        } else if (phase === 'failed') {
-          announce(`Stopped: ${error}`, 3200);
-        }
-      },
-    });
-    cleanupHighlight();
-    setAgentRunning(false);
-    if (result.status === 'completed') {
-      announce('All done.', 2000);
-    }
-  }, [announce]);
-
   const ask = useCallback(async (question) => {
     if (!question?.trim()) return;
     setBusy(true);
+    setComposeOpen(false);
+    setComposeValue('');
     cleanupHighlight();
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -154,7 +133,7 @@ export function GuiderWidget({
           signal: controller.signal,
           onStep: (step) => {
             streamedSteps.push(step);
-            if (streamedSteps.length === 1 && !agentEnabled) {
+            if (streamedSteps.length === 1) {
               highlightStep({ steps: streamedSteps }, 0);
             }
           },
@@ -177,13 +156,8 @@ export function GuiderWidget({
         return;
       }
 
-      if (agentEnabled) {
-        announce(`Running ${plan.steps.length} steps.`, 2200);
-        await runAgent(plan);
-      } else {
-        announce(`${plan.steps.length} step${plan.steps.length > 1 ? 's' : ''} ready.`, 1800);
-        await highlightStep(plan, 0);
-      }
+      announce(`${plan.steps.length} step${plan.steps.length > 1 ? 's' : ''} ready.`, 1800);
+      await highlightStep(plan, 0);
     } catch (error) {
       if (error?.name !== 'AbortError') {
         announce(`Sorry — ${String(error?.message || error)}`, 3600);
@@ -191,13 +165,17 @@ export function GuiderWidget({
     } finally {
       setBusy(false);
     }
-  }, [agentEnabled, apiKey, endpoint, highlightStep, map, model, proxyUrl, route, runAgent, announce]);
+  }, [apiKey, endpoint, highlightStep, map, model, proxyUrl, route, announce]);
 
-  const requestTypedQuestion = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const response = window.prompt('Ask Guider where anything lives');
-    if (response?.trim()) ask(response.trim());
-  }, [ask]);
+  const openComposer = useCallback((initialValue = '') => {
+    setComposeValue(initialValue);
+    setComposeOpen(true);
+  }, []);
+
+  const closeComposer = useCallback(() => {
+    setComposeOpen(false);
+    setComposeValue('');
+  }, []);
 
   const onMicClick = useCallback(async () => {
     try {
@@ -214,8 +192,8 @@ export function GuiderWidget({
       setRecording(false);
       setBusy(true);
       const blob = await recorder.stop();
-      const text = whisperUrl
-        ? await transcribeViaProxy(blob, whisperUrl)
+      const text = resolvedWhisperUrl
+        ? await transcribeViaProxy(blob, resolvedWhisperUrl)
         : await transcribeWithWhisper(blob, apiKey);
 
       if (text?.trim()) {
@@ -229,7 +207,13 @@ export function GuiderWidget({
     } finally {
       setBusy(false);
     }
-  }, [apiKey, ask, recording, whisperUrl, announce]);
+  }, [apiKey, ask, recording, resolvedWhisperUrl, announce]);
+
+  useEffect(() => {
+    if (!composeOpen) return undefined;
+    const timer = setTimeout(() => composeInputRef.current?.focus(), 30);
+    return () => clearTimeout(timer);
+  }, [composeOpen]);
 
   useEffect(() => {
     const onGlobalKey = (event) => {
@@ -245,21 +229,34 @@ export function GuiderWidget({
         onMicClick();
         return;
       }
-      requestTypedQuestion();
+      openComposer();
+    };
+
+    const onEscape = (event) => {
+      if (event.key === 'Escape') closeComposer();
     };
 
     document.addEventListener('keydown', onGlobalKey);
-    return () => document.removeEventListener('keydown', onGlobalKey);
-  }, [onMicClick, requestTypedQuestion]);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('keydown', onGlobalKey);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [closeComposer, onMicClick, openComposer]);
+
+  const onComposeSubmit = (event) => {
+    event.preventDefault();
+    const question = composeValue.trim();
+    if (!question) return;
+    ask(question);
+  };
 
   const chrome = getCursorChrome(cursor);
   const activeStatus = recording
     ? 'Listening…'
     : busy
       ? 'Thinking…'
-      : agentRunning
-        ? 'Guiding you…'
-        : statusText;
+      : statusText;
 
   return (
     <>
@@ -271,7 +268,7 @@ export function GuiderWidget({
         onClick={onMicClick}
         onContextMenu={(event) => {
           event.preventDefault();
-          requestTypedQuestion();
+          openComposer();
         }}
         aria-label={recording ? 'Stop Guider voice capture' : 'Start Guider voice capture'}
         aria-pressed={recording}
@@ -281,60 +278,39 @@ export function GuiderWidget({
           left: chrome.cursorLeft,
           top: chrome.cursorTop,
           zIndex: 2147483646,
-          width: 22,
-          height: 22,
+          width: 28,
+          height: 36,
           padding: 0,
-          borderRadius: 999,
-          border: `1px solid ${hexAlpha(accent, 0.18)}`,
-          background: 'rgba(255,255,255,0.94)',
-          boxShadow: `0 12px 28px rgba(15,23,42,.14), 0 0 0 8px ${hexAlpha(accent, 0.05)}`,
-          display: 'grid',
-          placeItems: 'center',
+          border: 'none',
+          background: 'transparent',
           cursor: 'pointer',
-          backdropFilter: 'blur(18px)',
         }}
       >
         <span
           aria-hidden="true"
           style={{
-            width: recording ? 8 : 6,
-            height: recording ? 8 : 6,
+            position: 'absolute',
+            inset: 0,
+            clipPath: 'polygon(0 0, 70% 55%, 46% 61%, 61% 100%, 47% 100%, 33% 66%, 0 0)',
+            background: `linear-gradient(180deg, ${hexAlpha('#dff3ff', 0.98)} 0%, ${hexAlpha('#83d0ff', 0.98)} 42%, ${hexAlpha(accent, 0.98)} 100%)`,
+            filter: `drop-shadow(0 12px 26px ${hexAlpha(accent, 0.24)})`,
+          }}
+        />
+        <span
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: 1,
+            top: 1,
+            width: 8,
+            height: 8,
             borderRadius: 999,
-            background: accent,
-            boxShadow: recording ? `0 0 0 6px ${hexAlpha(accent, 0.12)}` : 'none',
+            background: 'rgba(255,255,255,0.9)',
+            opacity: recording ? 1 : 0.76,
+            boxShadow: recording ? `0 0 0 8px ${hexAlpha(accent, 0.12)}` : 'none',
           }}
         />
       </button>
-
-      {agent && (
-        <button
-          type="button"
-          data-guider="guider-agent-toggle"
-          onClick={() => setAgentEnabled((value) => !value)}
-          aria-pressed={agentEnabled}
-          title={agentEnabled ? 'Auto guide enabled' : 'Auto guide disabled'}
-          style={{
-            position: 'fixed',
-            left: chrome.cursorLeft + 28,
-            top: chrome.cursorTop - 2,
-            zIndex: 2147483646,
-            height: 26,
-            padding: '0 10px',
-            borderRadius: 999,
-            border: '1px solid rgba(17,17,17,0.08)',
-            background: agentEnabled ? '#111111' : 'rgba(255,255,255,0.88)',
-            color: agentEnabled ? '#ffffff' : '#6b7280',
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '.12em',
-            textTransform: 'uppercase',
-            backdropFilter: 'blur(18px)',
-            cursor: 'pointer',
-          }}
-        >
-          auto
-        </button>
-      )}
 
       {activeStatus && (
         <div
@@ -360,6 +336,129 @@ export function GuiderWidget({
           }}
         >
           {activeStatus}
+        </div>
+      )}
+
+      {composeOpen && (
+        <div
+          data-guider="guider-compose-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeComposer();
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2147483645,
+            background: 'radial-gradient(circle at center, rgba(255,255,255,0.16), rgba(15,23,42,0.28))',
+            backdropFilter: 'blur(12px)',
+            display: 'grid',
+            placeItems: 'center',
+            padding: 20,
+          }}
+        >
+          <form
+            data-guider="guider-compose-modal"
+            onSubmit={onComposeSubmit}
+            style={{
+              width: 'min(520px, calc(100vw - 32px))',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,251,255,0.96))',
+              border: `1px solid ${hexAlpha(accent, 0.14)}`,
+              borderRadius: 28,
+              boxShadow: `0 32px 80px rgba(15,23,42,0.18), 0 0 0 1px ${hexAlpha('#ffffff', 0.5)} inset`,
+              padding: 20,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: '#6b7280', marginBottom: 6 }}>
+                  Guider
+                </div>
+                <div style={{ fontSize: 22, lineHeight: 1.1, color: '#0f172a', fontWeight: 600 }}>
+                  Ask where something lives
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeComposer}
+                aria-label="Close prompt"
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 999,
+                  border: '1px solid rgba(15,23,42,0.08)',
+                  background: 'rgba(255,255,255,0.74)',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  fontSize: 16,
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <textarea
+              ref={composeInputRef}
+              value={composeValue}
+              onChange={(event) => setComposeValue(event.target.value)}
+              placeholder="Invite a teammate. Open API keys. Show me billing."
+              rows={4}
+              style={{
+                width: '100%',
+                resize: 'none',
+                borderRadius: 20,
+                border: `1px solid ${hexAlpha(accent, 0.16)}`,
+                background: 'rgba(255,255,255,0.92)',
+                color: '#0f172a',
+                padding: '16px 18px',
+                fontSize: 15,
+                lineHeight: 1.5,
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14 }}>
+              <div style={{ fontSize: 12, color: '#64748b' }}>
+                Press Enter to ask or click the blue cursor to use voice.
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={closeComposer}
+                  style={{
+                    height: 40,
+                    padding: '0 16px',
+                    borderRadius: 999,
+                    border: '1px solid rgba(15,23,42,0.08)',
+                    background: 'rgba(255,255,255,0.88)',
+                    color: '#64748b',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!composeValue.trim() || busy}
+                  style={{
+                    height: 40,
+                    padding: '0 18px',
+                    borderRadius: 999,
+                    border: 'none',
+                    background: `linear-gradient(135deg, ${hexAlpha('#9ad9ff', 1)} 0%, ${hexAlpha(accent, 1)} 100%)`,
+                    color: '#072033',
+                    cursor: composeValue.trim() && !busy ? 'pointer' : 'default',
+                    fontWeight: 700,
+                    opacity: composeValue.trim() && !busy ? 1 : 0.5,
+                    boxShadow: `0 18px 32px ${hexAlpha(accent, 0.22)}`,
+                  }}
+                >
+                  Ask Guider
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
       )}
     </>
@@ -405,8 +504,8 @@ function stopSpeaking() {
 function getCursorChrome(cursor) {
   const width = typeof window === 'undefined' ? 1280 : window.innerWidth;
   const height = typeof window === 'undefined' ? 720 : window.innerHeight;
-  const cursorLeft = clamp(cursor.x - 11, 10, width - 32);
-  const cursorTop = clamp(cursor.y - 11, 10, height - 32);
+  const cursorLeft = clamp(cursor.x - 8, 8, width - 40);
+  const cursorTop = clamp(cursor.y - 6, 8, height - 48);
   const statusLeft = clamp(cursor.x + 34, 12, width - 232);
   const statusTop = clamp(cursor.y + 22, 12, height - 64);
   return { cursorLeft, cursorTop, statusLeft, statusTop };
@@ -430,4 +529,9 @@ function clearStatus(timerRef) {
   if (!timerRef.current) return;
   clearTimeout(timerRef.current);
   timerRef.current = null;
+}
+
+function inferWhisperUrl(proxyUrl) {
+  if (!proxyUrl) return undefined;
+  return proxyUrl.replace(/\/api\/guider\/plan(?:\?.*)?$/, '/api/guider/transcribe');
 }

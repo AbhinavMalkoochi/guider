@@ -5,6 +5,9 @@ import { GuiderWidget } from "guider";
 import Link from "next/link";
 
 const inter = Inter({ subsets: ["latin"] });
+const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+const guiderPlanUrl = process.env.NEXT_PUBLIC_PROXY_URL || (convexSiteUrl ? `${convexSiteUrl}/api/guider/plan` : undefined);
+const guiderWhisperUrl = process.env.NEXT_PUBLIC_WHISPER_URL || (convexSiteUrl ? `${convexSiteUrl}/api/guider/transcribe` : undefined);
 
 export const metadata: Metadata = {
   title: "OmniCloud Console",
@@ -26,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="block px-3 py-2 text-sm rounded-lg hover:bg-gray-800 transition-colors">Dashboard</Link>
             <Link href="/compute/instances" className="block px-3 py-2 text-sm rounded-lg hover:bg-gray-800 transition-colors">Instances</Link>
             <Link href="/compute/clusters" className="block px-3 py-2 text-sm rounded-lg hover:bg-gray-800 transition-colors">Kubernetes Clusters</Link>
-            
+
             <div className="text-xs text-gray-500 uppercase tracking-wider font-bold mb-2 px-3 mt-6">Storage</div>
             <Link href="/storage/buckets" className="block px-3 py-2 text-sm rounded-lg hover:bg-gray-800 transition-colors">Object Storage</Link>
             <Link href="/database/clusters" className="block px-3 py-2 text-sm rounded-lg hover:bg-gray-800 transition-colors">Managed Databases</Link>
@@ -75,14 +78,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </button>
             </div>
           </header>
-          
+
           <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
             {children}
           </div>
         </main>
-        
-        {/* We use proxyUrl for the widget. This connects to your SaaS backend proxy */}
-        <GuiderWidget mapUrl="/guider.map.json" proxyUrl={process.env.NEXT_PUBLIC_PROXY_URL || "https://your-convex-site.convex.site/api/guider/plan"} />
+
+        <GuiderWidget mapUrl="/guider.map.json" proxyUrl={guiderPlanUrl} whisperUrl={guiderWhisperUrl} />
       </body>
     </html>
   );
