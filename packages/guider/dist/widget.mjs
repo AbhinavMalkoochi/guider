@@ -1552,7 +1552,6 @@ function GuiderWidget({
   const [map, setMap] = useState(mapProp || null);
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [cursor, setCursor] = useState(() => ({ x: 28, y: 28 }));
   const [statusText, setStatusText] = useState("");
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeValue, setComposeValue] = useState("");
@@ -1583,20 +1582,6 @@ function GuiderWidget({
     (_a = abortRef.current) == null ? void 0 : _a.abort();
     stopSpeaking();
     clearStatus(statusTimerRef);
-  }, []);
-  useEffect(() => {
-    let frame = 0;
-    const onMove = (event) => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        setCursor({ x: event.clientX, y: event.clientY });
-      });
-    };
-    document.addEventListener("mousemove", onMove, true);
-    return () => {
-      cancelAnimationFrame(frame);
-      document.removeEventListener("mousemove", onMove, true);
-    };
   }, []);
   const route = currentRoute || (typeof window !== "undefined" ? window.location.pathname : "/");
   const resolvedWhisperUrl = whisperUrl || inferWhisperUrl(proxyUrl);
@@ -1773,67 +1758,46 @@ function GuiderWidget({
     if (!question) return;
     ask(question);
   };
-  const chrome = getCursorChrome(cursor);
   const activeStatus = recording ? "Listening\u2026" : busy ? "Thinking\u2026" : statusText;
   return /* @__PURE__ */ jsxs(Fragment, { children: [
     /* @__PURE__ */ jsx("div", { ref: liveRef, "aria-live": "polite", "aria-atomic": "true", style: { position: "absolute", clip: "rect(0 0 0 0)", clipPath: "inset(50%)", width: 1, height: 1, overflow: "hidden", whiteSpace: "nowrap" } }),
-    /* @__PURE__ */ jsxs(
+    /* @__PURE__ */ jsx(
       "button",
       {
         type: "button",
         "data-guider": "guider-launcher",
         onClick: onMicClick,
-        onContextMenu: (event) => {
-          event.preventDefault();
-          openComposer();
-        },
         "aria-label": recording ? "Stop Guider voice capture" : "Start Guider voice capture",
         "aria-pressed": recording,
-        title: "Click to talk. Right-click or Cmd/Ctrl+K to type. Cmd/Ctrl+Shift+K starts voice.",
+        title: "Click to talk. Press Cmd/Ctrl+K to type. Press Cmd/Ctrl+Shift+K for voice.",
         style: {
           position: "fixed",
-          left: chrome.cursorLeft,
-          top: chrome.cursorTop,
+          right: 20,
+          bottom: 20,
           zIndex: 2147483646,
-          width: 28,
-          height: 36,
+          width: 18,
+          height: 18,
           padding: 0,
           border: "none",
-          background: "transparent",
-          cursor: "pointer"
+          borderRadius: 999,
+          background: recording ? accent : "rgba(17,17,17,0.92)",
+          boxShadow: recording ? `0 0 0 8px ${hexAlpha(accent, 0.18)}, 0 14px 36px ${hexAlpha(accent, 0.24)}` : "0 14px 36px rgba(15,23,42,0.18)",
+          cursor: "pointer",
+          transition: "transform 160ms ease, box-shadow 160ms ease, background 160ms ease"
         },
-        children: [
-          /* @__PURE__ */ jsx(
-            "span",
-            {
-              "aria-hidden": "true",
-              style: {
-                position: "absolute",
-                inset: 0,
-                clipPath: "polygon(0 0, 70% 55%, 46% 61%, 61% 100%, 47% 100%, 33% 66%, 0 0)",
-                background: `linear-gradient(180deg, ${hexAlpha("#dff3ff", 0.98)} 0%, ${hexAlpha("#83d0ff", 0.98)} 42%, ${hexAlpha(accent, 0.98)} 100%)`,
-                filter: `drop-shadow(0 12px 26px ${hexAlpha(accent, 0.24)})`
-              }
+        children: /* @__PURE__ */ jsx(
+          "span",
+          {
+            "aria-hidden": "true",
+            style: {
+              position: "absolute",
+              inset: 4,
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.96)",
+              opacity: recording ? 0.98 : 0.82
             }
-          ),
-          /* @__PURE__ */ jsx(
-            "span",
-            {
-              "aria-hidden": "true",
-              style: {
-                position: "absolute",
-                left: 1,
-                top: 1,
-                width: 8,
-                height: 8,
-                borderRadius: 999,
-                background: "rgba(255,255,255,0.9)",
-                opacity: recording ? 1 : 0.76,
-                boxShadow: recording ? `0 0 0 8px ${hexAlpha(accent, 0.12)}` : "none"
-              }
-            }
-          )
-        ]
+          }
+        )
       }
     ),
     activeStatus && /* @__PURE__ */ jsx(
@@ -1844,11 +1808,11 @@ function GuiderWidget({
         "aria-live": "polite",
         style: {
           position: "fixed",
-          left: chrome.statusLeft,
-          top: chrome.statusTop,
+          right: 20,
+          bottom: 50,
           zIndex: 2147483646,
           maxWidth: 220,
-          padding: "9px 12px",
+          padding: "8px 11px",
           borderRadius: 999,
           border: "1px solid rgba(17,17,17,0.08)",
           background: "rgba(255,255,255,0.92)",
@@ -1873,8 +1837,8 @@ function GuiderWidget({
           position: "fixed",
           inset: 0,
           zIndex: 2147483645,
-          background: "radial-gradient(circle at center, rgba(255,255,255,0.16), rgba(15,23,42,0.28))",
-          backdropFilter: "blur(12px)",
+          background: "rgba(15,23,42,0.12)",
+          backdropFilter: "blur(8px)",
           display: "grid",
           placeItems: "center",
           padding: 20
@@ -1885,19 +1849,16 @@ function GuiderWidget({
             "data-guider": "guider-compose-modal",
             onSubmit: onComposeSubmit,
             style: {
-              width: "min(520px, calc(100vw - 32px))",
-              background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,251,255,0.96))",
-              border: `1px solid ${hexAlpha(accent, 0.14)}`,
-              borderRadius: 28,
-              boxShadow: `0 32px 80px rgba(15,23,42,0.18), 0 0 0 1px ${hexAlpha("#ffffff", 0.5)} inset`,
-              padding: 20
+              width: "min(460px, calc(100vw - 28px))",
+              background: "rgba(255,255,255,0.97)",
+              border: "1px solid rgba(15,23,42,0.08)",
+              borderRadius: 20,
+              boxShadow: "0 24px 70px rgba(15,23,42,0.14)",
+              padding: 14
             },
             children: [
-              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }, children: [
-                /* @__PURE__ */ jsxs("div", { children: [
-                  /* @__PURE__ */ jsx("div", { style: { fontSize: 11, letterSpacing: ".18em", textTransform: "uppercase", color: "#6b7280", marginBottom: 6 }, children: "Guider" }),
-                  /* @__PURE__ */ jsx("div", { style: { fontSize: 22, lineHeight: 1.1, color: "#0f172a", fontWeight: 600 }, children: "Ask where something lives" })
-                ] }),
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }, children: [
+                /* @__PURE__ */ jsx("div", { style: { fontSize: 12, letterSpacing: ".12em", textTransform: "uppercase", color: "#64748b" }, children: "Guider" }),
                 /* @__PURE__ */ jsx(
                   "button",
                   {
@@ -1909,7 +1870,7 @@ function GuiderWidget({
                       height: 34,
                       borderRadius: 999,
                       border: "1px solid rgba(15,23,42,0.08)",
-                      background: "rgba(255,255,255,0.74)",
+                      background: "rgba(248,250,252,0.9)",
                       color: "#64748b",
                       cursor: "pointer",
                       fontSize: 16
@@ -1919,30 +1880,27 @@ function GuiderWidget({
                 )
               ] }),
               /* @__PURE__ */ jsx(
-                "textarea",
+                "input",
                 {
                   ref: composeInputRef,
                   value: composeValue,
                   onChange: (event) => setComposeValue(event.target.value),
-                  placeholder: "Invite a teammate. Open API keys. Show me billing.",
-                  rows: 4,
+                  placeholder: "Ask a question about this page",
                   style: {
                     width: "100%",
-                    resize: "none",
-                    borderRadius: 20,
-                    border: `1px solid ${hexAlpha(accent, 0.16)}`,
-                    background: "rgba(255,255,255,0.92)",
+                    borderRadius: 14,
+                    border: `1px solid ${hexAlpha(accent, 0.14)}`,
+                    background: "rgba(248,250,252,0.94)",
                     color: "#0f172a",
-                    padding: "16px 18px",
-                    fontSize: 15,
-                    lineHeight: 1.5,
+                    padding: "14px 15px",
+                    fontSize: 14,
                     outline: "none",
                     boxSizing: "border-box"
                   }
                 }
               ),
-              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 14 }, children: [
-                /* @__PURE__ */ jsx("div", { style: { fontSize: 12, color: "#64748b" }, children: "Press Enter to ask or click the blue cursor to use voice." }),
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 10 }, children: [
+                /* @__PURE__ */ jsx("div", { style: { fontSize: 12, color: "#64748b" }, children: "Cmd/Ctrl+K to open. Shift+Cmd/Ctrl+K for voice." }),
                 /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
                   /* @__PURE__ */ jsx(
                     "button",
@@ -1950,8 +1908,8 @@ function GuiderWidget({
                       type: "button",
                       onClick: closeComposer,
                       style: {
-                        height: 40,
-                        padding: "0 16px",
+                        height: 34,
+                        padding: "0 12px",
                         borderRadius: 999,
                         border: "1px solid rgba(15,23,42,0.08)",
                         background: "rgba(255,255,255,0.88)",
@@ -1968,18 +1926,18 @@ function GuiderWidget({
                       type: "submit",
                       disabled: !composeValue.trim() || busy,
                       style: {
-                        height: 40,
-                        padding: "0 18px",
+                        height: 34,
+                        padding: "0 14px",
                         borderRadius: 999,
                         border: "none",
-                        background: `linear-gradient(135deg, ${hexAlpha("#9ad9ff", 1)} 0%, ${hexAlpha(accent, 1)} 100%)`,
-                        color: "#072033",
+                        background: "#111111",
+                        color: "#ffffff",
                         cursor: composeValue.trim() && !busy ? "pointer" : "default",
                         fontWeight: 700,
                         opacity: composeValue.trim() && !busy ? 1 : 0.5,
-                        boxShadow: `0 18px 32px ${hexAlpha(accent, 0.22)}`
+                        boxShadow: "0 10px 24px rgba(15,23,42,0.12)"
                       },
-                      children: "Ask Guider"
+                      children: "Ask"
                     }
                   )
                 ] })
@@ -2022,18 +1980,6 @@ function speakText(text, speechRef) {
 function stopSpeaking() {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
-}
-function getCursorChrome(cursor) {
-  const width = typeof window === "undefined" ? 1280 : window.innerWidth;
-  const height = typeof window === "undefined" ? 720 : window.innerHeight;
-  const cursorLeft = clamp(cursor.x - 8, 8, width - 40);
-  const cursorTop = clamp(cursor.y - 6, 8, height - 48);
-  const statusLeft = clamp(cursor.x + 34, 12, width - 232);
-  const statusTop = clamp(cursor.y + 22, 12, height - 64);
-  return { cursorLeft, cursorTop, statusLeft, statusTop };
-}
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), Math.max(min, max));
 }
 function flashStatus(text, duration, setStatusText, timerRef) {
   setStatusText(text || "");

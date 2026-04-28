@@ -1,5 +1,6 @@
 import { httpAction } from "./_generated/server";
 import { OpenAI } from "openai";
+import { toFile } from "openai/uploads";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -155,20 +156,46 @@ export const transcribe = httpAction(async (ctx, request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const formData = await request.formData();
-  const file = formData.get("file") as File;
+  try {
+    const formData = await request.formData();
+    const file = formData.get("file");
 
-  if (!file) {
-    return new Response("No file provided", { status: 400 });
+    if (!(file instanceof Blob)) {
+      return new Response(JSON.stringify({ error: "No audio file provided." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const filename = file instanceof File && file.name ? file.name : inferAudioFilename(file.type);
+    const upload = await toFile(await file.arrayBuffer(), filename, { type: file.type || "audio/webm" });
+    const response = await openai.audio.transcriptions.create({
+      file: upload,
+      model: "whisper-1",
+    });
+
+    return new Response(JSON.stringify({ text: response.text }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error: any) {
+    console.error("Transcription failed", error);
+    return new Response(
+      JSON.stringify({
+        error: error?.message || "Transcription failed.",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
-
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const response = await openai.audio.transcriptions.create({
-    file,
-    model: "whisper-1",
-  });
-
-  return new Response(JSON.stringify({ text: response.text }), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
 });
+
+function inferAudioFilename(contentType: string) {
+  if (contentType.includes("mp4")) return "voice.mp4";
+  if (contentType.includes("ogg")) return "voice.ogg";
+  if (contentType.includes("mpeg") || contentType.includes("mp3")) return "voice.mp3";
+  if (contentType.includes("wav")) return "voice.wav";
+  return "voice.webm";
+}

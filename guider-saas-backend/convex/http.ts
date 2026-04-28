@@ -23,6 +23,12 @@ http.route({
 });
 
 http.route({
+  path: "/api/guider/transcribe",
+  method: "OPTIONS",
+  handler: transcribe,
+});
+
+http.route({
   path: "/api/stats",
   method: "GET",
   handler: getStats,
