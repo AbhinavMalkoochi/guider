@@ -21,8 +21,8 @@ const shared = {
 await Promise.all([
   build({ ...shared, entryPoints: [path.join(root, 'src/widget/index.ts')], outfile: path.join(root, 'dist/widget.mjs'), format: 'esm' }),
   build({ ...shared, entryPoints: [path.join(root, 'src/widget/index.ts')], outfile: path.join(root, 'dist/widget.cjs'), format: 'cjs' }),
-  build({ ...shared, entryPoints: [path.join(root, 'src/agent/index.js')], outfile: path.join(root, 'dist/agent.mjs'), format: 'esm' }),
-  build({ ...shared, entryPoints: [path.join(root, 'src/agent/index.js')], outfile: path.join(root, 'dist/agent.cjs'), format: 'cjs' }),
+  build({ ...shared, entryPoints: [path.join(root, 'src/agent/index.ts')], outfile: path.join(root, 'dist/agent.mjs'), format: 'esm' }),
+  build({ ...shared, entryPoints: [path.join(root, 'src/agent/index.ts')], outfile: path.join(root, 'dist/agent.cjs'), format: 'cjs' }),
 ]);
 
 // Hand-written .d.ts (small surface area)

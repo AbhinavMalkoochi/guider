@@ -1,6 +1,7 @@
 "use client";
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
@@ -8,6 +9,7 @@ var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
 };
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
 // node_modules/html-to-image/es/util.js
 function resolveUrl(url, baseUrl) {
@@ -916,23 +918,26 @@ var init_es = __esm({
   }
 });
 
-// src/widget/GuiderWidget.jsx
-import React, { useCallback, useEffect, useRef, useState } from "react";
+// src/widget/GuiderWidget.tsx
+import { useCallback, useEffect, useRef, useState } from "react";
 
-// src/widget/screenshot.js
+// src/widget/screenshot.ts
 async function captureViewport() {
   const { toJpeg: toJpeg2 } = await Promise.resolve().then(() => (init_es(), es_exports));
   const root = document.documentElement;
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  const width = Math.max(1, Math.round(window.innerWidth));
+  const height = Math.max(1, Math.round(window.innerHeight));
   try {
     return await toJpeg2(root, {
-      quality: 0.72,
+      quality: 0.8,
       cacheBust: true,
       backgroundColor: "#ffffff",
-      pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
-      canvasWidth: Math.round(window.innerWidth * Math.min(window.devicePixelRatio || 1, 2)),
-      canvasHeight: Math.round(window.innerHeight * Math.min(window.devicePixelRatio || 1, 2)),
-      width: window.innerWidth,
-      height: window.innerHeight,
+      pixelRatio,
+      canvasWidth: Math.round(width * pixelRatio),
+      canvasHeight: Math.round(height * pixelRatio),
+      width,
+      height,
       skipFonts: true,
       style: {
         margin: "0",
@@ -942,173 +947,340 @@ async function captureViewport() {
       filter: (node) => shouldIncludeNode(node)
     });
   } catch {
-    return createFallbackCanvas().toDataURL("image/jpeg", 0.72);
+    return createFallbackCanvas(width, height).toDataURL("image/jpeg", 0.8);
   }
 }
 function shouldIncludeNode(node) {
   if (!(node instanceof Element)) return true;
   return !node.closest("[data-guider-panel], [data-guider-launcher], [data-guider-cursor], #guider-highlight-root");
 }
-function createFallbackCanvas() {
+function createFallbackCanvas(width, height) {
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(window.innerWidth));
-  canvas.height = Math.max(1, Math.round(window.innerHeight));
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return canvas;
-  const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) return canvas;
+  const gradient = context.createLinearGradient(0, 0, width, height);
   gradient.addColorStop(0, "#f7f7f5");
   gradient.addColorStop(1, "#ffffff");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#111111";
-  ctx.font = "500 20px sans-serif";
-  ctx.fillText("Guider fallback capture", 28, 42);
-  ctx.fillStyle = "rgba(17,17,17,0.55)";
-  ctx.font = "14px sans-serif";
-  ctx.fillText(window.location.pathname || "/", 28, 66);
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "#111111";
+  context.font = "500 20px sans-serif";
+  context.fillText("Guider fallback capture", 28, 42);
+  context.fillStyle = "rgba(17,17,17,0.55)";
+  context.font = "14px sans-serif";
+  context.fillText(window.location.pathname || "/", 28, 66);
   return canvas;
 }
 
-// src/widget/voice.js
+// src/widget/voice.ts
+var DEFAULT_OPTIONS = {
+  silenceDurationMs: 1400,
+  noSpeechTimeoutMs: 2800,
+  maxDurationMs: 12e3,
+  minSpeechLevel: 0.018,
+  sampleIntervalMs: 120,
+  timesliceMs: 250
+};
 var VoiceRecorder = class {
-  constructor() {
-    this.recorder = null;
-    this.chunks = [];
-    this.stream = null;
+  constructor(options = {}) {
+    __publicField(this, "recorder", null);
+    __publicField(this, "chunks", []);
+    __publicField(this, "stream", null);
+    __publicField(this, "audioContext", null);
+    __publicField(this, "analyser", null);
+    __publicField(this, "source", null);
+    __publicField(this, "monitorTimer", null);
+    __publicField(this, "startedAt", 0);
+    __publicField(this, "lastSpeechAt", 0);
+    __publicField(this, "peakLevel", 0);
+    __publicField(this, "hadSpeech", false);
+    __publicField(this, "stopReason", "manual");
+    __publicField(this, "stopPromise", null);
+    __publicField(this, "resolveStop", null);
+    __publicField(this, "options");
+    this.options = { ...DEFAULT_OPTIONS, ...options };
   }
   async start() {
     var _a;
-    if (!((_a = navigator.mediaDevices) == null ? void 0 : _a.getUserMedia))
+    if (!((_a = navigator.mediaDevices) == null ? void 0 : _a.getUserMedia)) {
       throw new Error("Microphone not supported in this browser.");
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime = pickMime();
-    this.recorder = new MediaRecorder(this.stream, mime ? { mimeType: mime } : void 0);
-    this.chunks = [];
-    this.recorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) this.chunks.push(e.data);
-    };
-    this.recorder.start();
-  }
-  async stop() {
-    if (!this.recorder) return null;
-    return new Promise((resolve) => {
-      this.recorder.onstop = () => {
-        var _a;
-        const blob = new Blob(this.chunks, { type: this.recorder.mimeType || "audio/webm" });
-        (_a = this.stream) == null ? void 0 : _a.getTracks().forEach((t) => t.stop());
-        this.recorder = null;
-        this.stream = null;
-        resolve(blob);
-      };
-      this.recorder.stop();
+    }
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
     });
+    this.setupLevelMonitor();
+    const mimeType = pickMime();
+    this.recorder = new MediaRecorder(
+      this.stream,
+      mimeType ? { mimeType, audioBitsPerSecond: 128e3 } : { audioBitsPerSecond: 128e3 }
+    );
+    this.chunks = [];
+    this.startedAt = Date.now();
+    this.lastSpeechAt = this.startedAt;
+    this.peakLevel = 0;
+    this.hadSpeech = false;
+    this.stopReason = "manual";
+    this.stopPromise = new Promise((resolve) => {
+      this.resolveStop = resolve;
+    });
+    this.recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        this.chunks.push(event.data);
+      }
+    };
+    this.recorder.onstop = () => {
+      var _a2;
+      const recorder = this.recorder;
+      const blob = new Blob(this.chunks, { type: (recorder == null ? void 0 : recorder.mimeType) || "audio/webm" });
+      const result = {
+        blob,
+        durationMs: Math.max(0, Date.now() - this.startedAt),
+        hadSpeech: this.hadSpeech,
+        peakLevel: this.peakLevel,
+        stopReason: this.stopReason
+      };
+      this.cleanup();
+      (_a2 = this.resolveStop) == null ? void 0 : _a2.call(this, result);
+      this.resolveStop = null;
+      this.stopPromise = null;
+    };
+    this.recorder.start(this.options.timesliceMs);
+    this.startMonitor();
+  }
+  async stop(reason = "manual") {
+    if (!this.recorder) return null;
+    if (this.recorder.state === "inactive") {
+      return this.stopPromise;
+    }
+    this.stopReason = reason;
+    this.recorder.stop();
+    return this.stopPromise;
+  }
+  setupLevelMonitor() {
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor || !this.stream) return;
+    this.audioContext = new AudioContextCtor();
+    this.source = this.audioContext.createMediaStreamSource(this.stream);
+    this.analyser = this.audioContext.createAnalyser();
+    this.analyser.fftSize = 2048;
+    this.source.connect(this.analyser);
+  }
+  startMonitor() {
+    this.monitorTimer = window.setInterval(() => {
+      const now = Date.now();
+      const elapsed = now - this.startedAt;
+      const level = this.sampleLevel();
+      if (level >= this.options.minSpeechLevel) {
+        this.hadSpeech = true;
+        this.lastSpeechAt = now;
+      }
+      if (elapsed >= this.options.maxDurationMs) {
+        this.triggerAutoStop("max-duration");
+        return;
+      }
+      if (!this.analyser) return;
+      if (!this.hadSpeech && elapsed >= this.options.noSpeechTimeoutMs) {
+        this.triggerAutoStop("no-speech");
+        return;
+      }
+      if (this.hadSpeech && now - this.lastSpeechAt >= this.options.silenceDurationMs) {
+        this.triggerAutoStop("silence");
+      }
+    }, this.options.sampleIntervalMs);
+  }
+  sampleLevel() {
+    if (!this.analyser) return 0;
+    const buffer = new Float32Array(this.analyser.fftSize);
+    this.analyser.getFloatTimeDomainData(buffer);
+    let total = 0;
+    for (const value of buffer) {
+      total += value * value;
+    }
+    const rms = Math.sqrt(total / buffer.length);
+    this.peakLevel = Math.max(this.peakLevel, rms);
+    return rms;
+  }
+  triggerAutoStop(reason) {
+    var _a, _b;
+    if (!this.recorder || this.recorder.state === "inactive") return;
+    (_b = (_a = this.options).onAutoStop) == null ? void 0 : _b.call(_a, reason);
+    void this.stop(reason);
+  }
+  cleanup() {
+    var _a, _b, _c, _d;
+    if (this.monitorTimer !== null) {
+      window.clearInterval(this.monitorTimer);
+      this.monitorTimer = null;
+    }
+    (_a = this.source) == null ? void 0 : _a.disconnect();
+    (_b = this.analyser) == null ? void 0 : _b.disconnect();
+    (_c = this.audioContext) == null ? void 0 : _c.close().catch(() => {
+    });
+    (_d = this.stream) == null ? void 0 : _d.getTracks().forEach((track) => track.stop());
+    this.source = null;
+    this.analyser = null;
+    this.audioContext = null;
+    this.stream = null;
+    this.recorder = null;
   }
 };
 function pickMime() {
   var _a;
   const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"];
-  for (const c of candidates) {
-    if (typeof MediaRecorder !== "undefined" && ((_a = MediaRecorder.isTypeSupported) == null ? void 0 : _a.call(MediaRecorder, c))) return c;
+  for (const candidate of candidates) {
+    if (typeof MediaRecorder !== "undefined" && ((_a = MediaRecorder.isTypeSupported) == null ? void 0 : _a.call(MediaRecorder, candidate))) {
+      return candidate;
+    }
   }
   return null;
 }
 async function transcribeWithWhisper(blob, apiKey, endpoint = "https://api.openai.com/v1/audio/transcriptions") {
-  const fd = new FormData();
-  const ext = (blob.type.split("/")[1] || "webm").split(";")[0];
-  fd.append("file", blob, `voice.${ext}`);
-  fd.append("model", "whisper-1");
-  const res = await fetch(endpoint, {
+  if (!apiKey) {
+    throw new Error("Missing OpenAI API key for direct transcription.");
+  }
+  const formData = new FormData();
+  const extension = (blob.type.split("/")[1] || "webm").split(";")[0];
+  formData.append("file", blob, `voice.${extension}`);
+  formData.append("model", "gpt-4o-mini-transcribe");
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}` },
-    body: fd
+    body: formData
   });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`Whisper failed (${res.status}): ${txt.slice(0, 200)}`);
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Transcription failed (${response.status}): ${text.slice(0, 200)}`);
   }
-  const data = await res.json();
+  const data = await response.json();
   return data.text || "";
 }
 
-// src/widget/selectors.js
+// src/widget/selectors.ts
+var KIND_WEIGHT = {
+  "data-guider": 100,
+  testid: 90,
+  aria: 82,
+  "role-name": 74,
+  text: 60,
+  css: 42
+};
 function findElement(candidates) {
-  if (!Array.isArray(candidates)) return null;
-  for (const c of candidates) {
-    const el = resolveOne(c);
-    if (el && isVisible(el)) return { el, matched: c };
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const matches = [];
+  for (const candidate of candidates) {
+    const resolved = resolveCandidate(candidate);
+    for (const element of resolved) {
+      if (!isVisible(element)) continue;
+      matches.push({
+        el: element,
+        matched: candidate,
+        score: scoreElement(candidate, element)
+      });
+    }
   }
-  return null;
+  matches.sort((left, right) => right.score - left.score);
+  return matches[0] ? { el: matches[0].el, matched: matches[0].matched } : null;
 }
-function resolveOne(c) {
-  var _a;
-  if (!c) return null;
-  if (typeof c === "string") {
-    try {
-      return document.querySelector(c);
-    } catch {
-      return null;
-    }
+function resolveCandidate(candidate) {
+  if (!candidate) return [];
+  if (typeof candidate === "string") {
+    return querySelectorAllSafe(candidate);
   }
-  if (c.kind === "css") {
-    try {
-      return document.querySelector(c.value);
-    } catch {
-      return null;
-    }
+  switch (candidate.kind) {
+    case "css":
+      return querySelectorAllSafe(candidate.value || "");
+    case "data-guider":
+      return querySelectorAllSafe(`[data-guider="${cssEscape(candidate.value)}"]`);
+    case "testid":
+      return querySelectorAllSafe(`[data-testid="${cssEscape(candidate.value)}"]`);
+    case "aria":
+      return querySelectorAllSafe(`[aria-label="${cssEscape(candidate.value)}"]`);
+    case "role-name":
+      return findByRoleName(candidate.role, candidate.name);
+    case "text":
+      return findByText(candidate.value, candidate.tag);
+    default:
+      return [];
   }
-  if (c.kind === "data-guider") {
-    return document.querySelector(`[data-guider="${cssEscape(c.value)}"]`);
+}
+function querySelectorAllSafe(selector) {
+  if (!selector) return [];
+  try {
+    return Array.from(document.querySelectorAll(selector));
+  } catch {
+    return [];
   }
-  if (c.kind === "testid") {
-    return document.querySelector(`[data-testid="${cssEscape(c.value)}"]`);
-  }
-  if (c.kind === "aria") {
-    return document.querySelector(`[aria-label="${cssEscape(c.value)}"]`);
-  }
-  if (c.kind === "role-name") {
-    const els = document.querySelectorAll(`[role="${cssEscape(c.role)}"]`);
-    for (const el of els) {
-      const name = el.getAttribute("aria-label") || ((_a = el.textContent) == null ? void 0 : _a.trim()) || "";
-      if (name.toLowerCase().includes(String(c.name).toLowerCase())) return el;
-    }
-    return null;
-  }
-  if (c.kind === "text") {
-    return findByText(c.value, c.tag);
-  }
-  return null;
+}
+function findByRoleName(role, name) {
+  if (!role || !name) return [];
+  const query = String(name).trim().toLowerCase();
+  if (!query) return [];
+  const elements = document.querySelectorAll(`[role="${cssEscape(role)}"]`);
+  return Array.from(elements).filter((element) => {
+    const accessibleName = getAccessibleName(element).toLowerCase();
+    return accessibleName === query || accessibleName.includes(query);
+  });
 }
 function findByText(text, tag) {
-  const t = String(text || "").trim().toLowerCase();
-  if (!t) return null;
-  const sel = tag || "a, button, [role=button], [role=link], [role=tab], summary, label";
-  const els = document.querySelectorAll(sel);
-  let best = null;
-  let bestLen = Infinity;
-  for (const el of els) {
-    const txt = (el.textContent || "").trim().toLowerCase();
-    if (!txt) continue;
-    if (txt === t) return el;
-    if (txt.includes(t) && txt.length < bestLen) {
-      best = el;
-      bestLen = txt.length;
+  const query = String(text || "").trim().toLowerCase();
+  if (!query) return [];
+  const selector = tag || "a, button, input, [role=button], [role=link], [role=tab], summary, label";
+  return Array.from(document.querySelectorAll(selector)).filter((element) => {
+    const valueText = getAccessibleName(element).toLowerCase();
+    return valueText === query || valueText.includes(query);
+  });
+}
+function getAccessibleName(element) {
+  return (element.getAttribute("aria-label") || (element instanceof HTMLInputElement ? element.value : "") || element.textContent || "").trim();
+}
+function scoreElement(candidate, element) {
+  const kind = typeof candidate === "string" ? "css" : candidate.kind || "css";
+  const rect = element.getBoundingClientRect();
+  const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
+  const elementArea = Math.max(1, rect.width * rect.height);
+  const areaScore = Math.min(18, elementArea / viewportArea * 240);
+  const viewportScore = rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth ? 10 : 0;
+  const occlusionPenalty = isOccluded(element) ? -50 : 0;
+  const exactNameBonus = typeof candidate === "object" && candidate.value ? getAccessibleName(element).toLowerCase() === candidate.value.toLowerCase() ? 12 : 0 : 0;
+  return (KIND_WEIGHT[kind] || 0) + areaScore + viewportScore + exactNameBonus + occlusionPenalty;
+}
+function isVisible(element) {
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  const styles = getComputedStyle(element);
+  if (styles.visibility === "hidden" || styles.display === "none" || parseFloat(styles.opacity) === 0) {
+    return false;
+  }
+  return rect.bottom >= 0 && rect.right >= 0 && rect.top <= window.innerHeight && rect.left <= window.innerWidth;
+}
+function isOccluded(element) {
+  const rect = element.getBoundingClientRect();
+  const points = [
+    { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+    { x: rect.left + 8, y: rect.top + 8 },
+    { x: rect.right - 8, y: rect.bottom - 8 }
+  ].filter((point) => point.x >= 0 && point.y >= 0 && point.x <= window.innerWidth && point.y <= window.innerHeight);
+  for (const point of points) {
+    const topElement = document.elementFromPoint(point.x, point.y);
+    if (!topElement) continue;
+    if (topElement === element || element.contains(topElement)) {
+      return false;
     }
   }
-  return best;
+  return points.length > 0;
 }
-function isVisible(el) {
-  if (!el || !el.getBoundingClientRect) return false;
-  const r = el.getBoundingClientRect();
-  if (r.width <= 0 || r.height <= 0) return false;
-  const cs = getComputedStyle(el);
-  if (cs.visibility === "hidden" || cs.display === "none" || parseFloat(cs.opacity) === 0) return false;
-  return true;
-}
-function cssEscape(s) {
-  return String(s).replace(/["\\]/g, "\\$&");
+function cssEscape(value) {
+  return String(value || "").replace(/["\\]/g, "\\$&");
 }
 
-// src/widget/highlight.js
+// src/widget/highlight.ts
 var highlight_exports = {};
 __export(highlight_exports, {
   cleanup: () => cleanup,
@@ -1121,44 +1293,66 @@ var listenersAttached = false;
 var lastPointer = getInitialPointer();
 function ensureStyle() {
   if (document.getElementById(STYLE_ID)) return;
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const style = document.createElement("style");
   style.id = STYLE_ID;
   style.textContent = `
     #${ROOT_ID} { position: fixed; inset: 0; pointer-events: none; z-index: 2147483600; }
     #${ROOT_ID} .gd-focus {
       position: fixed;
-      border: 1px solid rgba(31, 41, 55, .18);
+      border: 1px solid rgba(31, 41, 55, .16);
       background: rgba(59, 130, 246, .04);
       box-shadow: 0 18px 48px rgba(15, 23, 42, .08), 0 0 0 10px rgba(59, 130, 246, .08);
-      border-radius: 16px;
-      ${reduce ? "" : "transition: all .34s cubic-bezier(.2,.8,.2,1);"}
+      border-radius: 18px;
+      ${reduceMotion ? "" : "transition: all .22s ease-out;"}
     }
-    #${ROOT_ID} .gd-pointer {
+    #${ROOT_ID} .gd-target {
       position: fixed;
-      width: 24px;
-      height: 24px;
+      width: 34px;
+      height: 34px;
+      margin-left: -10px;
+      margin-top: -10px;
       transform-origin: 7px 7px;
-      ${reduce ? "" : "transition: left .42s cubic-bezier(.2,.8,.2,1), top .42s cubic-bezier(.2,.8,.2,1);"}
+      ${reduceMotion ? "" : "transition: left .18s ease-out, top .18s ease-out;"}
     }
-    #${ROOT_ID} .gd-pointer::before {
+    #${ROOT_ID} .gd-target::before {
       content: '';
       position: absolute;
       inset: 0;
-      clip-path: polygon(0 0, 68% 58%, 43% 63%, 57% 100%, 43% 100%, 31% 66%, 0 0);
+      clip-path: polygon(2% 2%, 74% 56%, 49% 61%, 64% 100%, 48% 100%, 34% 66%, 2% 2%);
       background: var(--gd-accent, #3b82f6);
-      filter: drop-shadow(0 10px 18px rgba(59, 130, 246, .28));
+      filter: drop-shadow(0 12px 22px rgba(59, 130, 246, .28));
     }
-    #${ROOT_ID} .gd-pointer::after {
+    #${ROOT_ID} .gd-target::after {
       content: '';
       position: absolute;
-      left: -6px;
-      top: -6px;
+      left: -10px;
+      top: -10px;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 1px solid rgba(59, 130, 246, .24);
+      background: rgba(59, 130, 246, .08);
+    }
+    #${ROOT_ID} .gd-follower {
+      position: fixed;
       width: 18px;
       height: 18px;
+      margin-left: -9px;
+      margin-top: -9px;
       border-radius: 999px;
-      border: 1px solid rgba(59, 130, 246, .22);
-      background: rgba(59, 130, 246, .08);
+      border: 1px solid rgba(15, 23, 42, .12);
+      background: rgba(255, 255, 255, .78);
+      box-shadow: 0 10px 22px rgba(15, 23, 42, .12);
+      backdrop-filter: blur(10px);
+      ${reduceMotion ? "" : "transition: left .08s linear, top .08s linear;"}
+    }
+    #${ROOT_ID} .gd-line {
+      position: fixed;
+      height: 2px;
+      transform-origin: 0 50%;
+      background: linear-gradient(90deg, rgba(59,130,246,.42), rgba(59,130,246,.92));
+      ${reduceMotion ? "" : "transition: left .08s linear, top .08s linear, width .12s ease-out, transform .12s ease-out;"}
     }
     #${ROOT_ID} .gd-tip {
       position: fixed;
@@ -1171,41 +1365,9 @@ function ensureStyle() {
       font: 500 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
       box-shadow: 0 22px 44px rgba(15, 23, 42, .14);
       backdrop-filter: blur(18px);
-      pointer-events: auto;
     }
-    #${ROOT_ID} .gd-tip:focus-within { outline: 2px solid rgba(59, 130, 246, .34); outline-offset: 2px; }
-    #${ROOT_ID} .gd-tip .gd-step {
-      color: rgba(17, 24, 39, .5);
-      font-size: 10px;
-      letter-spacing: .16em;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-    #${ROOT_ID} .gd-tip .gd-title { font-weight: 700; margin-bottom: 4px; }
-    #${ROOT_ID} .gd-tip .gd-body { color: rgba(17, 24, 39, .72); }
-    #${ROOT_ID} .gd-tip .gd-actions { margin-top: 12px; display: flex; gap: 8px; justify-content: flex-start; }
-    #${ROOT_ID} .gd-tip button {
-      background: #111827;
-      color: #fff;
-      border: 0;
-      padding: 8px 12px;
-      border-radius: 999px;
-      font: 600 12px ui-sans-serif, system-ui;
-      cursor: pointer;
-    }
-    #${ROOT_ID} .gd-tip button.gd-secondary {
-      background: transparent;
-      color: rgba(17, 24, 39, .65);
-      border: 1px solid rgba(15, 23, 42, .08);
-    }
-    #${ROOT_ID} .gd-tip button:focus-visible { outline: 2px solid rgba(59, 130, 246, .34); outline-offset: 2px; }
-    #${ROOT_ID} .gd-line {
-      position: fixed;
-      height: 1px;
-      transform-origin: 0 50%;
-      background: linear-gradient(90deg, rgba(59,130,246,.72), rgba(59,130,246,0));
-      ${reduce ? "" : "transition: left .34s cubic-bezier(.2,.8,.2,1), top .34s cubic-bezier(.2,.8,.2,1), width .34s cubic-bezier(.2,.8,.2,1), transform .34s cubic-bezier(.2,.8,.2,1);"}
-    }
+    #${ROOT_ID} .gd-title { font-weight: 700; margin-bottom: 4px; }
+    #${ROOT_ID} .gd-body { color: rgba(17, 24, 39, .72); }
     @media (prefers-contrast: more) {
       #${ROOT_ID} .gd-focus { box-shadow: 0 0 0 4px rgba(255,255,255,.4); }
       #${ROOT_ID} .gd-tip { background: #fff; color: #000; border-color: #000; }
@@ -1221,7 +1383,9 @@ function ensureRoot(accent) {
     root.setAttribute("aria-live", "polite");
     document.body.appendChild(root);
   }
-  if (accent) root.style.setProperty("--gd-accent", accent);
+  if (accent) {
+    root.style.setProperty("--gd-accent", accent);
+  }
   return root;
 }
 function cleanup() {
@@ -1232,30 +1396,16 @@ function cleanup() {
     window.removeEventListener("resize", onReposition, true);
     window.removeEventListener("scroll", onReposition, true);
     document.removeEventListener("mousemove", onMouseMove, true);
-    document.removeEventListener("keydown", onKeydown, true);
     listenersAttached = false;
   }
   activeReposition = null;
-  activeKeyHandlers = null;
 }
-var activeKeyHandlers = null;
 function onReposition() {
   activeReposition == null ? void 0 : activeReposition();
 }
-function onMouseMove(e) {
-  lastPointer = { x: e.clientX, y: e.clientY };
-}
-function onKeydown(e) {
-  var _a, _b, _c, _d;
-  if (!activeKeyHandlers) return;
-  if (e.key === "Escape") {
-    e.preventDefault();
-    (_a = activeKeyHandlers.skip) == null ? void 0 : _a.call(activeKeyHandlers);
-  }
-  if (e.key === "Enter" && (((_c = (_b = e.target) == null ? void 0 : _b.closest) == null ? void 0 : _c.call(_b, `#${ROOT_ID}`)) || document.activeElement === document.body)) {
-    e.preventDefault();
-    (_d = activeKeyHandlers.next) == null ? void 0 : _d.call(activeKeyHandlers);
-  }
+function onMouseMove(event) {
+  lastPointer = { x: event.clientX, y: event.clientY };
+  activeReposition == null ? void 0 : activeReposition();
 }
 function getInitialPointer() {
   if (typeof window === "undefined") {
@@ -1266,151 +1416,150 @@ function getInitialPointer() {
     y: Math.round(window.innerHeight - 80)
   };
 }
-async function show({ element, title, body, stepIndex, totalSteps, accent, onNext, onSkip }) {
+async function show({ element, title, body, accent }) {
   ensureStyle();
   const root = ensureRoot(accent);
   root.innerHTML = "";
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  element.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center", inline: "center" });
-  await new Promise((r) => setTimeout(r, reduce ? 0 : 250));
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  element.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center", inline: "center" });
+  await new Promise((resolve) => window.setTimeout(resolve, reduceMotion ? 0 : 180));
   const focus = document.createElement("div");
   focus.className = "gd-focus";
   root.appendChild(focus);
-  const pointer = document.createElement("div");
-  pointer.className = "gd-pointer";
-  root.appendChild(pointer);
+  const follower = document.createElement("div");
+  follower.className = "gd-follower";
+  root.appendChild(follower);
   const line = document.createElement("div");
   line.className = "gd-line";
   root.appendChild(line);
+  const target = document.createElement("div");
+  target.className = "gd-target";
+  root.appendChild(target);
   const tip = document.createElement("div");
   tip.className = "gd-tip";
-  tip.setAttribute("role", "dialog");
-  tip.setAttribute("aria-live", "assertive");
-  tip.setAttribute("aria-label", `Guider step ${stepIndex + 1} of ${totalSteps}: ${title || ""}`);
+  tip.setAttribute("role", "status");
   tip.innerHTML = `
-    <div class="gd-step">Step ${stepIndex + 1} of ${totalSteps}</div>
     <div class="gd-title"></div>
     <div class="gd-body"></div>
-    <div class="gd-actions">
-      <button class="gd-secondary" type="button" data-act="skip" data-guider="guider-skip">Skip</button>
-      <button type="button" data-act="next" data-guider="guider-next">${stepIndex + 1 === totalSteps ? "Done" : "Next"}</button>
-    </div>
   `;
-  tip.querySelector(".gd-title").textContent = title || "";
-  tip.querySelector(".gd-body").textContent = body || "";
+  const titleElement = tip.querySelector(".gd-title");
+  const bodyElement = tip.querySelector(".gd-body");
+  if (titleElement) {
+    titleElement.textContent = title || "Go here";
+  }
+  if (bodyElement) {
+    bodyElement.textContent = body || "";
+  }
   root.appendChild(tip);
-  tip.querySelector("[data-act=next]").onclick = () => onNext == null ? void 0 : onNext();
-  tip.querySelector("[data-act=skip]").onclick = () => onSkip == null ? void 0 : onSkip();
-  setTimeout(() => {
-    var _a;
-    return (_a = tip.querySelector("[data-act=next]")) == null ? void 0 : _a.focus({ preventScroll: true });
-  }, 60);
   const reposition = () => {
-    const r = element.getBoundingClientRect();
-    const pad = 10;
-    const W = innerWidth, H = innerHeight;
-    focus.style.cssText = `top:${r.top - pad}px;left:${r.left - pad}px;width:${r.width + 2 * pad}px;height:${r.height + 2 * pad}px;`;
-    const tipW = Math.min(280, W - 24);
-    const tipH = tip.offsetHeight || 110;
-    let tx, ty, side;
-    if (r.right + tipW + 24 < W) {
-      tx = r.right + 18;
-      ty = Math.max(8, Math.min(H - tipH - 8, r.top));
-      side = "left";
-    } else if (r.bottom + tipH + 24 < H) {
-      tx = Math.max(8, Math.min(W - tipW - 8, r.left));
-      ty = r.bottom + 18;
-      side = "top";
-    } else {
-      tx = Math.max(8, Math.min(W - tipW - 8, r.left));
-      ty = Math.max(8, r.top - tipH - 18);
-      side = "bottom";
+    const rect = element.getBoundingClientRect();
+    const padding = 10;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    focus.style.cssText = `top:${rect.top - padding}px;left:${rect.left - padding}px;width:${rect.width + 2 * padding}px;height:${rect.height + 2 * padding}px;`;
+    const tipWidth = Math.min(280, viewportWidth - 24);
+    const tipHeight = tip.offsetHeight || 96;
+    let tipLeft = rect.right + 20;
+    let tipTop = Math.max(8, Math.min(viewportHeight - tipHeight - 8, rect.top));
+    if (tipLeft + tipWidth > viewportWidth - 8) {
+      tipLeft = Math.max(8, Math.min(viewportWidth - tipWidth - 8, rect.left));
+      tipTop = rect.bottom + tipHeight + 20 < viewportHeight ? rect.bottom + 18 : Math.max(8, rect.top - tipHeight - 18);
     }
-    tip.style.left = `${tx}px`;
-    tip.style.top = `${ty}px`;
-    const targetX = r.left + Math.min(r.width * 0.45, 22);
-    const targetY = r.top + Math.min(r.height * 0.5, 22);
-    pointer.style.left = `${targetX}px`;
-    pointer.style.top = `${targetY}px`;
+    tip.style.left = `${tipLeft}px`;
+    tip.style.top = `${tipTop}px`;
+    const targetX = rect.left + Math.min(rect.width * 0.5, 30);
+    const targetY = rect.top + Math.min(rect.height * 0.5, 30);
     const startX = lastPointer.x;
     const startY = lastPointer.y;
-    const endX = tx + (side === "left" ? 0 : tipW * 0.5);
-    const endY = ty + (side === "top" ? 0 : tipH * 0.5);
-    const dx = endX - startX;
-    const dy = endY - startY;
-    const length = Math.hypot(dx, dy);
+    follower.style.left = `${startX}px`;
+    follower.style.top = `${startY}px`;
+    target.style.left = `${targetX}px`;
+    target.style.top = `${targetY}px`;
+    const dx = targetX - startX;
+    const dy = targetY - startY;
     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    const length = Math.max(0, Math.hypot(dx, dy) - 18);
     line.style.left = `${startX}px`;
     line.style.top = `${startY}px`;
     line.style.width = `${length}px`;
     line.style.transform = `rotate(${angle}deg)`;
-    lastPointer = { x: targetX, y: targetY };
   };
   reposition();
   activeReposition = reposition;
-  activeKeyHandlers = { next: onNext, skip: onSkip };
   if (!listenersAttached) {
     window.addEventListener("resize", onReposition, true);
     window.addEventListener("scroll", onReposition, true);
     document.addEventListener("mousemove", onMouseMove, true);
-    document.addEventListener("keydown", onKeydown, true);
     listenersAttached = true;
   }
 }
 
-// src/widget/llm.js
-var SYSTEM = `You are Guider, a navigation assistant embedded in a Next.js app.
+// src/widget/llm.ts
+var SYSTEM = `You are Guider, a navigation assistant embedded in a web app.
 You receive: the app's site map JSON, the user's current route, a screenshot of the user's
 current viewport, and the user's question.
 
-Your job: produce a step-by-step plan that points the user to the exact element(s) they need.
+Your job: return one grounded guidance target that the user can act on right now.
 
 Strict rules:
-- Use the screenshot to verify what is currently visible AND the map to know what exists.
-- For each step, return:
-    - "title": short imperative (e.g., "Open the Settings menu")
-    - "body": one-sentence user-facing explanation
-    - "selectors": ranked candidates (most stable first). Each is one of:
-        { "kind": "data-guider", "value": "..." }
-        { "kind": "testid",      "value": "..." }
-        { "kind": "aria",        "value": "..." }
-        { "kind": "role-name",   "role": "button"|"link"|"tab"|..., "name": "..." }
-        { "kind": "text",        "value": "...", "tag": "button|a|..." }
-        { "kind": "css",         "value": "..." }
-    - "visualHint": describe the element visually (color, position, surrounding text).
-    - "expectedRoute": if clicking navigates the user, the route they land on (else null).
-    - "action": optional. { "kind": "click" } (default) | { "kind": "type", "value": "..." } |
-                { "kind": "select", "value": "..." } | { "kind": "press", "key": "Enter" }.
-- If you are NOT confident the element exists, return confidence "low" and a "fallbackMessage".
-- Do not invent UI not in the map. Steps must be sequential.
+- Use the screenshot to verify what is currently visible and the map to know what exists.
+- Never invent UI or routes that are not supported by the map.
+- Return exactly one best target, not a multi-step plan.
+- If the answer is not supported by the map or the current screenshot, return confidence "low"
+  and a fallbackMessage that clearly says you cannot verify it.
 
 Output JSON shape:
-{ "steps": [...], "confidence": "high"|"medium"|"low", "fallbackMessage": "string|null" }`;
+{
+  "summary": "short summary",
+  "immediateSpeech": "one short sentence the assistant can say immediately",
+  "target": {
+    "title": "short imperative",
+    "body": "one sentence explaining what to do",
+    "selectors": [
+      { "kind": "data-guider", "value": "..." },
+      { "kind": "testid", "value": "..." },
+      { "kind": "aria", "value": "..." },
+      { "kind": "role-name", "role": "button", "name": "..." },
+      { "kind": "text", "value": "...", "tag": "button" },
+      { "kind": "css", "value": "..." }
+    ],
+    "visualHint": "describe the element visually",
+    "expectedRoute": "route or null"
+  },
+  "routeIntent": "route or null",
+  "confidence": "high"|"medium"|"low",
+  "fallbackMessage": "string|null"
+}`;
 function compactMap(map, currentRoute) {
-  if (!(map == null ? void 0 : map.pages)) return { pages: [] };
+  const pages = Array.isArray(map == null ? void 0 : map.pages) ? map.pages : [];
   return {
-    pages: map.pages.map((p) => {
-      const isCurrent = p.route === currentRoute;
+    pages: pages.map((page) => {
+      const isCurrent = page.route === currentRoute;
       return {
-        route: p.route,
-        purpose: p.purpose || null,
-        categories: p.categories || [],
+        route: page.route,
+        purpose: page.purpose || null,
+        categories: page.categories || [],
         ...isCurrent ? {
-          summary: p.summary,
-          interactive: p.interactive,
-          visuals: p.visuals,
-          modals: p.modals,
-          dropdowns: p.dropdowns,
-          conditions: p.conditions
+          summary: page.summary,
+          interactive: page.interactive,
+          visuals: page.visuals,
+          modals: page.modals,
+          dropdowns: page.dropdowns,
+          conditions: page.conditions
         } : {
-          interactiveCount: (p.interactive || []).length,
-          keyActions: (p.interactive || []).slice(0, 6).map((x) => x.label || x.purpose || x.tag)
+          interactiveCount: Array.isArray(page.interactive) ? page.interactive.length : 0,
+          keyActions: Array.isArray(page.interactive) ? page.interactive.slice(0, 6).map((entry) => entry.label || entry.purpose || entry.tag) : []
         }
       };
     })
   };
 }
-function buildMessages({ question, currentRoute, map, screenshotDataUrl }) {
+function buildMessages({
+  question,
+  currentRoute,
+  map,
+  screenshotDataUrl
+}) {
   return [
     { role: "system", content: SYSTEM },
     {
@@ -1446,27 +1595,30 @@ async function planGuidance({
   var _a, _b, _c;
   const url = (proxy == null ? void 0 : proxy.plan) || endpoint;
   const headers = { "Content-Type": "application/json" };
-  if (!proxy && apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  if (!proxy && apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
   const body = proxy ? { question, currentRoute, mapVersion: map == null ? void 0 : map.version, screenshotDataUrl } : {
     model,
     response_format: { type: "json_object" },
     messages: buildMessages({ question, currentRoute, map, screenshotDataUrl })
   };
-  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`Guider plan failed (${res.status}): ${txt.slice(0, 300)}`);
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Guider plan failed (${response.status}): ${text.slice(0, 300)}`);
   }
-  const data = await res.json();
+  const data = await response.json();
   const content = proxy ? JSON.stringify(data) : ((_c = (_b = (_a = data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) || "{}";
   try {
-    return JSON.parse(content);
+    return validateGuidance(JSON.parse(content), map);
   } catch {
-    return {
-      steps: [],
-      confidence: "low",
-      fallbackMessage: "I'm not sure where to point you. Try rephrasing."
-    };
+    return emptyGuidance("I'm not sure where to point you. Try rephrasing.");
   }
 }
 async function streamPlanGuidance({
@@ -1476,66 +1628,158 @@ async function streamPlanGuidance({
   screenshotDataUrl,
   proxyUrl,
   signal,
-  onStep
+  onAck,
+  onTarget
 }) {
-  if (!proxyUrl) throw new Error("streamPlanGuidance requires proxyUrl.");
-  const res = await fetch(proxyUrl, {
+  const response = await fetch(proxyUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify({ question, currentRoute, mapVersion: map == null ? void 0 : map.version, screenshotDataUrl }),
     signal
   });
-  if (!res.ok || !res.body) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`Guider stream failed (${res.status}): ${txt.slice(0, 200)}`);
+  if (!response.ok || !response.body) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Guider stream failed (${response.status}): ${text.slice(0, 200)}`);
   }
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = "";
-  const steps = [];
-  let confidence = "medium";
-  let fallbackMessage = null;
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let guidance = emptyGuidance();
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let idx;
-    while ((idx = buf.indexOf("\n\n")) !== -1) {
-      const raw = buf.slice(0, idx);
-      buf = buf.slice(idx + 2);
-      const ev = parseSse(raw);
-      if (!ev) continue;
-      if (ev.event === "step") {
+    buffer += decoder.decode(value, { stream: true });
+    let separatorIndex;
+    while ((separatorIndex = buffer.indexOf("\n\n")) !== -1) {
+      const raw = buffer.slice(0, separatorIndex);
+      buffer = buffer.slice(separatorIndex + 2);
+      const event = parseSse(raw);
+      if (!event) continue;
+      if (event.event === "ack") {
         try {
-          const s = JSON.parse(ev.data);
-          steps.push(s);
-          onStep == null ? void 0 : onStep(s, steps.length - 1);
+          const payload = JSON.parse(event.data);
+          onAck == null ? void 0 : onAck(payload.message || null);
         } catch {
+          onAck == null ? void 0 : onAck(null);
         }
-      } else if (ev.event === "done") {
+        continue;
+      }
+      if (event.event === "target") {
         try {
-          const d = JSON.parse(ev.data);
-          confidence = d.confidence || confidence;
-          fallbackMessage = d.fallbackMessage || null;
+          const payload = JSON.parse(event.data);
+          guidance = { ...guidance, ...validateGuidance(payload, map) };
+          onTarget == null ? void 0 : onTarget(guidance.target);
         } catch {
+          guidance = emptyGuidance("I'm not sure where to point you. Try rephrasing.");
         }
-      } else if (ev.event === "error") {
-        throw new Error(ev.data || "stream error");
+        continue;
+      }
+      if (event.event === "done") {
+        try {
+          const payload = JSON.parse(event.data);
+          guidance = validateGuidance({ ...guidance, ...payload }, map);
+        } catch {
+          guidance = emptyGuidance("I'm not sure where to point you. Try rephrasing.");
+        }
+        continue;
+      }
+      if (event.event === "error") {
+        throw new Error(event.data || "stream error");
       }
     }
   }
-  return { steps, confidence, fallbackMessage };
+  return validateGuidance(guidance, map);
 }
 function parseSse(raw) {
-  let event = "message", data = "";
+  let event = "message";
+  let data = "";
   for (const line of raw.split("\n")) {
     if (line.startsWith("event:")) event = line.slice(6).trim();
     else if (line.startsWith("data:")) data += (data ? "\n" : "") + line.slice(5).trim();
   }
   return data ? { event, data } : null;
 }
+function validateGuidance(payload, map) {
+  const parsed = payload && typeof payload === "object" ? payload : {};
+  const target = parsed.target && isMapBackedTarget(parsed.target, map) ? normalizeTarget(parsed.target) : null;
+  const routeIntent = typeof parsed.routeIntent === "string" ? parsed.routeIntent : null;
+  const routeExists = !routeIntent || routeInMap(map, routeIntent);
+  if (!target || !routeExists) {
+    return emptyGuidance(parsed.fallbackMessage || "I can't verify that from the site map and current screen.");
+  }
+  return {
+    summary: typeof parsed.summary === "string" ? parsed.summary : null,
+    immediateSpeech: typeof parsed.immediateSpeech === "string" ? parsed.immediateSpeech : null,
+    target,
+    routeIntent,
+    confidence: parsed.confidence === "high" || parsed.confidence === "medium" ? parsed.confidence : "medium",
+    fallbackMessage: typeof parsed.fallbackMessage === "string" ? parsed.fallbackMessage : null
+  };
+}
+function normalizeTarget(target) {
+  if (!target.title || !Array.isArray(target.selectors) || target.selectors.length === 0) {
+    return null;
+  }
+  return {
+    title: target.title,
+    body: typeof target.body === "string" ? target.body : "",
+    selectors: target.selectors,
+    visualHint: typeof target.visualHint === "string" ? target.visualHint : "",
+    expectedRoute: typeof target.expectedRoute === "string" ? target.expectedRoute : null
+  };
+}
+function emptyGuidance(fallbackMessage = "I can't verify that from the site map and current screen.") {
+  return {
+    summary: null,
+    immediateSpeech: null,
+    target: null,
+    routeIntent: null,
+    confidence: "low",
+    fallbackMessage
+  };
+}
+function isMapBackedTarget(target, map) {
+  if (!Array.isArray(target.selectors) || target.selectors.length === 0) {
+    return false;
+  }
+  const pages = Array.isArray(map == null ? void 0 : map.pages) ? map.pages : [];
+  const interactiveEntries = pages.flatMap(
+    (page) => Array.isArray(page.interactive) ? page.interactive : []
+  );
+  return target.selectors.some((selector) => matchesInteractive(selector, interactiveEntries));
+}
+function matchesInteractive(selector, entries) {
+  if (typeof selector === "string") {
+    return false;
+  }
+  return entries.some((entry) => {
+    var _a;
+    const label = String(entry.label || "").toLowerCase();
+    const guiderId = String(entry.guiderId || "").toLowerCase();
+    const testId = String(entry.testId || "").toLowerCase();
+    const ariaLabel = String(((_a = entry.aria) == null ? void 0 : _a.label) || "").toLowerCase();
+    switch (selector.kind) {
+      case "data-guider":
+        return guiderId && guiderId === String(selector.value || "").toLowerCase();
+      case "testid":
+        return testId && testId === String(selector.value || "").toLowerCase();
+      case "aria":
+        return ariaLabel && ariaLabel === String(selector.value || "").toLowerCase();
+      case "text":
+        return label.includes(String(selector.value || "").toLowerCase());
+      case "role-name":
+        return label.includes(String(selector.name || "").toLowerCase());
+      default:
+        return false;
+    }
+  });
+}
+function routeInMap(map, route) {
+  const pages = Array.isArray(map == null ? void 0 : map.pages) ? map.pages : [];
+  return pages.some((page) => page.route === route);
+}
 
-// src/widget/GuiderWidget.jsx
+// src/widget/GuiderWidget.tsx
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 function GuiderWidget({
   apiKey,
@@ -1551,7 +1795,7 @@ function GuiderWidget({
 }) {
   const [map, setMap] = useState(mapProp || null);
   const [busy, setBusy] = useState(false);
-  const [recording, setRecording] = useState(false);
+  const [phase, setPhase] = useState("idle");
   const [statusText, setStatusText] = useState("");
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeValue, setComposeValue] = useState("");
@@ -1561,6 +1805,7 @@ function GuiderWidget({
   const speechRef = useRef(null);
   const statusTimerRef = useRef(null);
   const composeInputRef = useRef(null);
+  const finishingVoiceRef = useRef(null);
   useEffect(() => {
     if (mapProp) {
       setMap(mapProp);
@@ -1569,96 +1814,97 @@ function GuiderWidget({
     if (!mapUrl) return;
     let cancelled = false;
     fetch(mapUrl).then((response) => response.ok ? response.json() : null).then((json) => {
-      if (!cancelled) setMap(json);
+      if (!cancelled) {
+        setMap(json);
+      }
     }).catch(() => {
     });
     return () => {
       cancelled = true;
     };
   }, [mapProp, mapUrl]);
+  const clearVoiceSession = useCallback(() => {
+    recorderRef.current = null;
+    finishingVoiceRef.current = null;
+  }, []);
   useEffect(() => () => {
-    var _a;
+    var _a, _b;
     cleanup();
     (_a = abortRef.current) == null ? void 0 : _a.abort();
+    void ((_b = recorderRef.current) == null ? void 0 : _b.stop("manual"));
     stopSpeaking();
     clearStatus(statusTimerRef);
   }, []);
   const route = currentRoute || (typeof window !== "undefined" ? window.location.pathname : "/");
   const resolvedWhisperUrl = whisperUrl || inferWhisperUrl(proxyUrl);
-  const announce = useCallback((text, duration = 2400) => {
+  const announce = useCallback((text, duration = 2400, shouldSpeak = speak) => {
     if (liveRef.current) {
       liveRef.current.textContent = "";
-      setTimeout(() => {
-        if (liveRef.current) liveRef.current.textContent = text;
+      window.setTimeout(() => {
+        if (liveRef.current) {
+          liveRef.current.textContent = text;
+        }
       }, 30);
     }
-    if (speak) speakText(text, speechRef);
+    if (shouldSpeak) {
+      speakText(text, speechRef);
+    }
     flashStatus(text, duration, setStatusText, statusTimerRef);
   }, [speak]);
-  const highlightStep = useCallback(async (plan, index) => {
-    var _a;
+  const highlightTarget = useCallback(async (target) => {
     cleanup();
-    const step = (_a = plan == null ? void 0 : plan.steps) == null ? void 0 : _a[index];
-    if (!step) return;
-    const found = findElement(step.selectors);
+    if (!target) return;
+    const found = findElement(target.selectors);
     if (!found) {
-      announce(`I couldn't find it. Look for ${step.visualHint || step.title}.`, 3200);
+      announce(`I couldn't verify that on this screen. Look for ${target.visualHint || target.title}.`, 3200);
       return;
     }
-    announce([step.title, step.body, step.visualHint ? `Look for ${step.visualHint}.` : ""].filter(Boolean).join(" "), 3200);
+    announce(
+      [target.title, target.body, target.visualHint ? `Look for ${target.visualHint}.` : ""].filter(Boolean).join(" "),
+      3200
+    );
     await show({
       element: found.el,
-      title: step.title,
-      body: step.body,
-      stepIndex: index,
-      totalSteps: plan.steps.length,
-      accent,
-      onNext: () => {
-        const nextIndex = index + 1;
-        if (nextIndex >= plan.steps.length) {
-          cleanup();
-          announce("Done.", 1800);
-          return;
-        }
-        highlightStep(plan, nextIndex);
-      },
-      onSkip: () => {
-        cleanup();
-        announce("Skipped.", 1600);
-      }
+      title: target.title,
+      body: target.body,
+      accent
     });
   }, [accent, announce]);
   const ask = useCallback(async (question) => {
-    var _a, _b;
-    if (!(question == null ? void 0 : question.trim())) return;
+    var _a;
+    if (!question.trim()) return;
     setBusy(true);
+    setPhase("guiding");
     setComposeOpen(false);
     setComposeValue("");
     cleanup();
     (_a = abortRef.current) == null ? void 0 : _a.abort();
+    stopSpeaking();
+    announce("Working on it.", 1200);
     const controller = new AbortController();
     abortRef.current = controller;
     try {
       const screenshotDataUrl = await captureViewport();
-      let plan;
+      let guidance;
       if (proxyUrl) {
-        const streamedSteps = [];
-        plan = await streamPlanGuidance({
+        guidance = await streamPlanGuidance({
           question,
           currentRoute: route,
           map,
           screenshotDataUrl,
           proxyUrl,
           signal: controller.signal,
-          onStep: (step) => {
-            streamedSteps.push(step);
-            if (streamedSteps.length === 1) {
-              highlightStep({ steps: streamedSteps }, 0);
+          onAck: (message) => {
+            if (message) {
+              flashStatus(message, 1200, setStatusText, statusTimerRef);
             }
+          },
+          onTarget: (target) => {
+            void highlightTarget(target);
           }
         });
       } else {
-        plan = await planGuidance({
+        guidance = await planGuidance({
           question,
           currentRoute: route,
           map,
@@ -1669,20 +1915,83 @@ function GuiderWidget({
           signal: controller.signal
         });
       }
-      if (plan.confidence === "low" || !((_b = plan.steps) == null ? void 0 : _b.length)) {
-        announce(plan.fallbackMessage || "I'm not confident about where to point you.", 3200);
+      if (guidance.confidence === "low" || !guidance.target) {
+        announce(guidance.fallbackMessage || "I'm not confident about where to point you.", 3200);
         return;
       }
-      announce(`${plan.steps.length} step${plan.steps.length > 1 ? "s" : ""} ready.`, 1800);
-      await highlightStep(plan, 0);
+      await highlightTarget(guidance.target);
     } catch (error) {
-      if ((error == null ? void 0 : error.name) !== "AbortError") {
-        announce(`Sorry \u2014 ${String((error == null ? void 0 : error.message) || error)}`, 3600);
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        announce(`Sorry \u2014 ${String(error instanceof Error ? error.message : error)}`, 3600);
       }
     } finally {
       setBusy(false);
+      setPhase("idle");
     }
-  }, [apiKey, endpoint, highlightStep, map, model, proxyUrl, route, announce]);
+  }, [apiKey, endpoint, highlightTarget, map, model, proxyUrl, route, announce]);
+  const finishVoiceCapture = useCallback((reason) => {
+    if (finishingVoiceRef.current) {
+      return finishingVoiceRef.current;
+    }
+    const recorder = recorderRef.current;
+    if (!recorder) {
+      return Promise.resolve();
+    }
+    recorderRef.current = null;
+    setPhase("transcribing");
+    const task = (async () => {
+      try {
+        const capture = await recorder.stop(reason);
+        if (!capture || shouldRejectCapture(capture)) {
+          const message = (capture == null ? void 0 : capture.stopReason) === "no-speech" ? "I didn't hear anything. Try again." : "I didn't catch that clearly. Try again.";
+          announce(message, 2200);
+          return;
+        }
+        const text = resolvedWhisperUrl ? await transcribeViaProxy(capture.blob, resolvedWhisperUrl) : await transcribeWithWhisper(capture.blob, apiKey);
+        const question = sanitizeTranscript(text);
+        if (!question) {
+          announce("I didn't catch that.", 2200);
+          return;
+        }
+        await ask(question);
+      } catch (error) {
+        announce(`Voice error: ${String(error instanceof Error ? error.message : error)}.`, 3200);
+      } finally {
+        clearVoiceSession();
+        if (!busy) {
+          setPhase("idle");
+        }
+      }
+    })();
+    finishingVoiceRef.current = task;
+    return task;
+  }, [announce, apiKey, ask, busy, clearVoiceSession, resolvedWhisperUrl]);
+  const onMicClick = useCallback(async () => {
+    var _a;
+    try {
+      if (phase === "listening") {
+        await finishVoiceCapture("manual");
+        return;
+      }
+      cleanup();
+      (_a = abortRef.current) == null ? void 0 : _a.abort();
+      stopSpeaking();
+      const recorder = new VoiceRecorder({
+        onAutoStop: (reason) => {
+          void finishVoiceCapture(reason);
+        }
+      });
+      await recorder.start();
+      recorderRef.current = recorder;
+      setPhase("listening");
+      clearStatus(statusTimerRef);
+      setStatusText("Listening\u2026");
+    } catch (error) {
+      clearVoiceSession();
+      setPhase("idle");
+      announce(`Voice error: ${String(error instanceof Error ? error.message : error)}.`, 3200);
+    }
+  }, [announce, clearVoiceSession, finishVoiceCapture, phase]);
   const openComposer = useCallback((initialValue = "") => {
     setComposeValue(initialValue);
     setComposeOpen(true);
@@ -1691,40 +2000,13 @@ function GuiderWidget({
     setComposeOpen(false);
     setComposeValue("");
   }, []);
-  const onMicClick = useCallback(async () => {
-    try {
-      if (!recording) {
-        const recorder2 = new VoiceRecorder();
-        await recorder2.start();
-        recorderRef.current = recorder2;
-        setRecording(true);
-        return;
-      }
-      const recorder = recorderRef.current;
-      recorderRef.current = null;
-      setRecording(false);
-      setBusy(true);
-      const blob = await recorder.stop();
-      const text = resolvedWhisperUrl ? await transcribeViaProxy(blob, resolvedWhisperUrl) : await transcribeWithWhisper(blob, apiKey);
-      if (text == null ? void 0 : text.trim()) {
-        await ask(text.trim());
-      } else {
-        announce("I didn't catch that.", 2200);
-      }
-    } catch (error) {
-      setRecording(false);
-      announce(`Voice error: ${error.message}.`, 3200);
-    } finally {
-      setBusy(false);
-    }
-  }, [apiKey, ask, recording, resolvedWhisperUrl, announce]);
   useEffect(() => {
     if (!composeOpen) return void 0;
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       var _a;
       return (_a = composeInputRef.current) == null ? void 0 : _a.focus();
     }, 30);
-    return () => clearTimeout(timer);
+    return () => window.clearTimeout(timer);
   }, [composeOpen]);
   useEffect(() => {
     const onGlobalKey = (event) => {
@@ -1737,13 +2019,15 @@ function GuiderWidget({
       if (event.key.toLowerCase() !== "k") return;
       event.preventDefault();
       if (event.shiftKey) {
-        onMicClick();
+        void onMicClick();
         return;
       }
       openComposer();
     };
     const onEscape = (event) => {
-      if (event.key === "Escape") closeComposer();
+      if (event.key === "Escape") {
+        closeComposer();
+      }
     };
     document.addEventListener("keydown", onGlobalKey);
     document.addEventListener("keydown", onEscape);
@@ -1756,19 +2040,37 @@ function GuiderWidget({
     event.preventDefault();
     const question = composeValue.trim();
     if (!question) return;
-    ask(question);
+    void ask(question);
   };
-  const activeStatus = recording ? "Listening\u2026" : busy ? "Thinking\u2026" : statusText;
+  const activeStatus = phase === "listening" ? "Listening\u2026" : phase === "transcribing" ? "Transcribing\u2026" : phase === "guiding" || busy ? "Working\u2026" : statusText;
   return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("div", { ref: liveRef, "aria-live": "polite", "aria-atomic": "true", style: { position: "absolute", clip: "rect(0 0 0 0)", clipPath: "inset(50%)", width: 1, height: 1, overflow: "hidden", whiteSpace: "nowrap" } }),
+    /* @__PURE__ */ jsx(
+      "div",
+      {
+        ref: liveRef,
+        "aria-live": "polite",
+        "aria-atomic": "true",
+        style: {
+          position: "absolute",
+          clip: "rect(0 0 0 0)",
+          clipPath: "inset(50%)",
+          width: 1,
+          height: 1,
+          overflow: "hidden",
+          whiteSpace: "nowrap"
+        }
+      }
+    ),
     /* @__PURE__ */ jsx(
       "button",
       {
         type: "button",
         "data-guider": "guider-launcher",
-        onClick: onMicClick,
-        "aria-label": recording ? "Stop Guider voice capture" : "Start Guider voice capture",
-        "aria-pressed": recording,
+        onClick: () => {
+          void onMicClick();
+        },
+        "aria-label": phase === "listening" ? "Stop Guider voice capture" : "Start Guider voice capture",
+        "aria-pressed": phase === "listening",
         title: "Click to talk. Press Cmd/Ctrl+K to type. Press Cmd/Ctrl+Shift+K for voice.",
         style: {
           position: "fixed",
@@ -1780,8 +2082,8 @@ function GuiderWidget({
           padding: 0,
           border: "none",
           borderRadius: 999,
-          background: recording ? accent : "rgba(17,17,17,0.92)",
-          boxShadow: recording ? `0 0 0 8px ${hexAlpha(accent, 0.18)}, 0 14px 36px ${hexAlpha(accent, 0.24)}` : "0 14px 36px rgba(15,23,42,0.18)",
+          background: phase === "listening" ? accent : "rgba(17,17,17,0.92)",
+          boxShadow: phase === "listening" ? `0 0 0 8px ${hexAlpha(accent, 0.18)}, 0 14px 36px ${hexAlpha(accent, 0.24)}` : "0 14px 36px rgba(15,23,42,0.18)",
           cursor: "pointer",
           transition: "transform 160ms ease, box-shadow 160ms ease, background 160ms ease"
         },
@@ -1794,7 +2096,7 @@ function GuiderWidget({
               inset: 4,
               borderRadius: 999,
               background: "rgba(255,255,255,0.96)",
-              opacity: recording ? 0.98 : 0.82
+              opacity: phase === "listening" ? 0.98 : 0.82
             }
           }
         )
@@ -1950,20 +2252,37 @@ function GuiderWidget({
   ] });
 }
 async function transcribeViaProxy(blob, url) {
-  const fd = new FormData();
-  fd.append("file", blob, "voice.webm");
-  const res = await fetch(url, { method: "POST", body: fd });
-  if (!res.ok) throw new Error(`Whisper proxy failed (${res.status})`);
-  const data = await res.json();
+  const formData = new FormData();
+  const extension = (blob.type.split("/")[1] || "webm").split(";")[0];
+  formData.append("file", blob, `voice.${extension}`);
+  const response = await fetch(url, { method: "POST", body: formData });
+  if (!response.ok) throw new Error(`Whisper proxy failed (${response.status})`);
+  const data = await response.json();
   return data.text || "";
 }
+function shouldRejectCapture(capture) {
+  return !capture.hadSpeech || capture.durationMs < 500 || capture.peakLevel < 0.012;
+}
+function sanitizeTranscript(text) {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "";
+  const lower = cleaned.toLowerCase();
+  if (/^(um+|uh+|mm+|hmm+|ah+|er+)$/i.test(lower)) return "";
+  const words = cleaned.split(" ").filter(Boolean);
+  if (words.length === 1 && cleaned.length < 4) return "";
+  return cleaned;
+}
 function hexAlpha(hex, alpha) {
-  const m = /^#?([0-9a-f]{3,8})$/i.exec(hex || "");
-  if (!m) return `rgba(48,128,255,${alpha})`;
-  let h = m[1];
-  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
-  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
+  const match = /^#?([0-9a-f]{3,8})$/i.exec(hex || "");
+  if (!match) return `rgba(48,128,255,${alpha})`;
+  let value = match[1];
+  if (value.length === 3) {
+    value = value.split("").map((part) => part + part).join("");
+  }
+  const red = parseInt(value.slice(0, 2), 16);
+  const green = parseInt(value.slice(2, 4), 16);
+  const blue = parseInt(value.slice(4, 6), 16);
+  return `rgba(${red},${green},${blue},${alpha})`;
 }
 function speakText(text, speechRef) {
   if (typeof window === "undefined" || !("speechSynthesis" in window) || !text) return;
@@ -1985,14 +2304,14 @@ function flashStatus(text, duration, setStatusText, timerRef) {
   setStatusText(text || "");
   clearStatus(timerRef);
   if (!text || !duration) return;
-  timerRef.current = setTimeout(() => {
+  timerRef.current = window.setTimeout(() => {
     setStatusText("");
     timerRef.current = null;
   }, duration);
 }
 function clearStatus(timerRef) {
   if (!timerRef.current) return;
-  clearTimeout(timerRef.current);
+  window.clearTimeout(timerRef.current);
   timerRef.current = null;
 }
 function inferWhisperUrl(proxyUrl) {
@@ -2000,14 +2319,15 @@ function inferWhisperUrl(proxyUrl) {
   return proxyUrl.replace(/\/api\/guider\/plan(?:\?.*)?$/, "/api/guider/transcribe");
 }
 
-// src/widget/context.js
-import React2, { createContext, useContext, useState as useState2, useCallback as useCallback2 } from "react";
-var Ctx = createContext(null);
+// src/widget/context.tsx
+import { createContext, useCallback as useCallback2, useContext, useState as useState2 } from "react";
+import { jsx as jsx2 } from "react/jsx-runtime";
+var GuiderContext = createContext(null);
 function GuiderProvider({ children, value }) {
-  return React2.createElement(Ctx.Provider, { value }, children);
+  return /* @__PURE__ */ jsx2(GuiderContext.Provider, { value, children });
 }
 function useGuider() {
-  return useContext(Ctx);
+  return useContext(GuiderContext);
 }
 
 // src/agent/interact.js
@@ -2239,23 +2559,22 @@ function timeout(ms, msg) {
   return new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms));
 }
 
-// src/agent/index.js
+// src/agent/index.ts
 var agentMode = {
   available: true,
-  /**
-   * Execute a plan returned by the widget LLM.
-   *
-   * @param {{
-   *   plan: { steps: Array<{ title:string, body?:string, selectors:any[], visualHint?:string,
-   *                          expectedRoute?:string|null, action?:{kind:string, value?:any, key?:string} }>,
-   *           confidence: 'high'|'medium'|'low' },
-   *   onProgress?: (event: { phase: 'starting'|'completed'|'failed', index: number, step: object, action?: string, error?: string }) => void,
-   *   signal?: AbortSignal,
-   *   showHighlight?: boolean,
-   * }} args
-   */
-  async run({ plan, onProgress, signal, showHighlight = true }) {
-    return runPlan(plan, { onProgress, signal, showHighlight, highlight: highlight_exports });
+  async run({
+    plan,
+    onProgress,
+    signal,
+    showHighlight = true
+  }) {
+    const progressHandler = onProgress ? (event) => onProgress(event) : void 0;
+    return runPlan(plan, {
+      onProgress: progressHandler,
+      signal,
+      showHighlight,
+      highlight: highlight_exports
+    });
   }
 };
 export {

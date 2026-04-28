@@ -1,6 +1,6 @@
 # Guider
 
-> **AI-powered navigation SDK for Next.js apps.** Drop in a CLI + a single React component and your users can ask "where do I update my billing email?" — Guider points them to the exact element to click, with a visible highlight and arrow. Optional Agent Mode actually clicks for them.
+> **AI-powered navigation SDK for Next.js apps.** Drop in a CLI + a single React component and your users can ask "where do I update my payment method?" — Guider listens, auto-stops on pause, and points them to the exact UI target with a live guided cursor. Optional Agent Mode can still act on a step plan for automation scenarios.
 
 ```bash
 npx guider init                                # scan codebase → guider.map.json
@@ -30,9 +30,9 @@ That's it.
 | | |
 |---|---|
 | **CLI** (`init` / `sync` / `inject`) | Babel-AST scanner + LLM enrichment + terminal verification |
-| **Widget** (`<GuiderWidget />`) | 47 KB ESM bundle, voice + chat, fresh-screenshot vision, ranked selector resolution, glowing highlight overlay, full a11y |
+| **Widget** (`<GuiderWidget />`) | Typed React widget with voice + chat, viewport capture, ranked selector validation, live guided cursor, strict fallback behavior |
 | **Agent Mode** | DOM-level click/type/select/keyboard with React-native-value-setter for controlled inputs, MutationObserver settle detection, route-change waits |
-| **Server proxy** | 100 lines of Node Express that hides your OpenAI key, streams plans via SSE, proxies Whisper |
+| **Server proxy** | TypeScript Express proxy that hides your OpenAI key, streams grounded pointer responses via SSE, proxies transcription |
 
 ---
 
@@ -56,14 +56,12 @@ That's it.
 
 ## How the widget works
 
-1. User asks (typed or via Whisper voice).
-2. The widget snaps a fresh JPEG of the current viewport (`html2canvas`, lazy-imported on first ask).
-3. It sends `{ question, currentRoute, screenshot, mapVersion }` to your proxy (or directly to OpenAI in dev).
-4. The proxy streams a plan back as Server-Sent Events. **The first highlight appears the moment step 0 arrives** — the rest stream in.
-5. Each step has ranked selector candidates: `data-guider` → `data-testid` → `aria-label` → `role+name` → text content → CSS. The widget tries them in order, validating visibility.
-6. On match: scroll into view, dim the page, draw a glowing ring + arrow + tooltip with step counter. User confirms each step.
-7. On selector miss: the widget falls back to the LLM's `visualHint` ("Look for the orange button at the top right") instead of pointing at the wrong thing.
-8. On low confidence: the widget says so plainly instead of guessing.
+1. The user asks a question by typing or pressing Shift+Cmd/Ctrl+K for voice.
+2. Voice capture starts immediately, auto-stops on silence, and suppresses empty or low-signal recordings before they ever reach the model.
+3. The widget captures the exact current viewport, sends the question plus screenshot and map context to your proxy, and speaks back immediately instead of waiting in silence.
+4. The proxy returns one grounded target, not a multi-step card flow.
+5. The widget resolves ranked selector candidates in the live DOM, scores visible matches, rejects occluded or stale hits, and draws a single guided cursor from the user's current pointer to the verified target.
+6. If the map or current screen cannot support the answer, Guider says so plainly instead of inventing UI.
 
 ### Agent Mode
 
@@ -119,7 +117,7 @@ Set `OPENAI_API_KEY` in your shell or pass `--api-key`. Without a key, the scann
 
 - **Bundle**: 47 KB widget (ESM, gzipped less). `html2canvas` (~50 KB gz) is **lazy-imported** the first time a question is asked. React/ReactDOM are peer deps.
 - **Screenshots** are captured fresh per query and sent only to the endpoint you configure. Never cached, never persisted by the widget.
-- **Server proxy** ([`examples/server-proxy/`](./examples/server-proxy/)) keeps your API key out of the browser, streams plans via SSE, and proxies Whisper.
+- **Server proxy** ([`examples/server-proxy/`](./examples/server-proxy/)) keeps your API key out of the browser, streams grounded pointer responses via SSE, and proxies transcription.
 - **Map** is served from your origin (`/guider.map.json`). Cache aggressively — it only changes on redeploy.
 - **Cleanup** is guaranteed on widget close, step completion, and unmount — every overlay, every listener, the global keydown handler.
 - **Accessibility**:

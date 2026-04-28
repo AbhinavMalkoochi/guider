@@ -7,4 +7,4 @@
  */
 export { GuiderWidget } from './GuiderWidget.jsx';
 export { GuiderProvider, useGuider } from './context';
-export { agentMode } from '../agent/index.js';
+export { agentMode } from '../agent/index';

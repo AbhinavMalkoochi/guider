@@ -5,82 +5,122 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// src/widget/selectors.js
+// src/widget/selectors.ts
+var KIND_WEIGHT = {
+  "data-guider": 100,
+  testid: 90,
+  aria: 82,
+  "role-name": 74,
+  text: 60,
+  css: 42
+};
 function findElement(candidates) {
-  if (!Array.isArray(candidates)) return null;
-  for (const c of candidates) {
-    const el = resolveOne(c);
-    if (el && isVisible(el)) return { el, matched: c };
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const matches = [];
+  for (const candidate of candidates) {
+    const resolved = resolveCandidate(candidate);
+    for (const element of resolved) {
+      if (!isVisible(element)) continue;
+      matches.push({
+        el: element,
+        matched: candidate,
+        score: scoreElement(candidate, element)
+      });
+    }
   }
-  return null;
+  matches.sort((left, right) => right.score - left.score);
+  return matches[0] ? { el: matches[0].el, matched: matches[0].matched } : null;
 }
-function resolveOne(c) {
-  var _a;
-  if (!c) return null;
-  if (typeof c === "string") {
-    try {
-      return document.querySelector(c);
-    } catch {
-      return null;
-    }
+function resolveCandidate(candidate) {
+  if (!candidate) return [];
+  if (typeof candidate === "string") {
+    return querySelectorAllSafe(candidate);
   }
-  if (c.kind === "css") {
-    try {
-      return document.querySelector(c.value);
-    } catch {
-      return null;
-    }
+  switch (candidate.kind) {
+    case "css":
+      return querySelectorAllSafe(candidate.value || "");
+    case "data-guider":
+      return querySelectorAllSafe(`[data-guider="${cssEscape(candidate.value)}"]`);
+    case "testid":
+      return querySelectorAllSafe(`[data-testid="${cssEscape(candidate.value)}"]`);
+    case "aria":
+      return querySelectorAllSafe(`[aria-label="${cssEscape(candidate.value)}"]`);
+    case "role-name":
+      return findByRoleName(candidate.role, candidate.name);
+    case "text":
+      return findByText(candidate.value, candidate.tag);
+    default:
+      return [];
   }
-  if (c.kind === "data-guider") {
-    return document.querySelector(`[data-guider="${cssEscape(c.value)}"]`);
+}
+function querySelectorAllSafe(selector) {
+  if (!selector) return [];
+  try {
+    return Array.from(document.querySelectorAll(selector));
+  } catch {
+    return [];
   }
-  if (c.kind === "testid") {
-    return document.querySelector(`[data-testid="${cssEscape(c.value)}"]`);
-  }
-  if (c.kind === "aria") {
-    return document.querySelector(`[aria-label="${cssEscape(c.value)}"]`);
-  }
-  if (c.kind === "role-name") {
-    const els = document.querySelectorAll(`[role="${cssEscape(c.role)}"]`);
-    for (const el of els) {
-      const name = el.getAttribute("aria-label") || ((_a = el.textContent) == null ? void 0 : _a.trim()) || "";
-      if (name.toLowerCase().includes(String(c.name).toLowerCase())) return el;
-    }
-    return null;
-  }
-  if (c.kind === "text") {
-    return findByText(c.value, c.tag);
-  }
-  return null;
+}
+function findByRoleName(role, name) {
+  if (!role || !name) return [];
+  const query = String(name).trim().toLowerCase();
+  if (!query) return [];
+  const elements = document.querySelectorAll(`[role="${cssEscape(role)}"]`);
+  return Array.from(elements).filter((element) => {
+    const accessibleName = getAccessibleName(element).toLowerCase();
+    return accessibleName === query || accessibleName.includes(query);
+  });
 }
 function findByText(text, tag) {
-  const t = String(text || "").trim().toLowerCase();
-  if (!t) return null;
-  const sel = tag || "a, button, [role=button], [role=link], [role=tab], summary, label";
-  const els = document.querySelectorAll(sel);
-  let best = null;
-  let bestLen = Infinity;
-  for (const el of els) {
-    const txt = (el.textContent || "").trim().toLowerCase();
-    if (!txt) continue;
-    if (txt === t) return el;
-    if (txt.includes(t) && txt.length < bestLen) {
-      best = el;
-      bestLen = txt.length;
+  const query = String(text || "").trim().toLowerCase();
+  if (!query) return [];
+  const selector = tag || "a, button, input, [role=button], [role=link], [role=tab], summary, label";
+  return Array.from(document.querySelectorAll(selector)).filter((element) => {
+    const valueText = getAccessibleName(element).toLowerCase();
+    return valueText === query || valueText.includes(query);
+  });
+}
+function getAccessibleName(element) {
+  return (element.getAttribute("aria-label") || (element instanceof HTMLInputElement ? element.value : "") || element.textContent || "").trim();
+}
+function scoreElement(candidate, element) {
+  const kind = typeof candidate === "string" ? "css" : candidate.kind || "css";
+  const rect = element.getBoundingClientRect();
+  const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
+  const elementArea = Math.max(1, rect.width * rect.height);
+  const areaScore = Math.min(18, elementArea / viewportArea * 240);
+  const viewportScore = rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth ? 10 : 0;
+  const occlusionPenalty = isOccluded(element) ? -50 : 0;
+  const exactNameBonus = typeof candidate === "object" && candidate.value ? getAccessibleName(element).toLowerCase() === candidate.value.toLowerCase() ? 12 : 0 : 0;
+  return (KIND_WEIGHT[kind] || 0) + areaScore + viewportScore + exactNameBonus + occlusionPenalty;
+}
+function isVisible(element) {
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  const styles = getComputedStyle(element);
+  if (styles.visibility === "hidden" || styles.display === "none" || parseFloat(styles.opacity) === 0) {
+    return false;
+  }
+  return rect.bottom >= 0 && rect.right >= 0 && rect.top <= window.innerHeight && rect.left <= window.innerWidth;
+}
+function isOccluded(element) {
+  const rect = element.getBoundingClientRect();
+  const points = [
+    { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+    { x: rect.left + 8, y: rect.top + 8 },
+    { x: rect.right - 8, y: rect.bottom - 8 }
+  ].filter((point) => point.x >= 0 && point.y >= 0 && point.x <= window.innerWidth && point.y <= window.innerHeight);
+  for (const point of points) {
+    const topElement = document.elementFromPoint(point.x, point.y);
+    if (!topElement) continue;
+    if (topElement === element || element.contains(topElement)) {
+      return false;
     }
   }
-  return best;
+  return points.length > 0;
 }
-function isVisible(el) {
-  if (!el || !el.getBoundingClientRect) return false;
-  const r = el.getBoundingClientRect();
-  if (r.width <= 0 || r.height <= 0) return false;
-  const cs = getComputedStyle(el);
-  if (cs.visibility === "hidden" || cs.display === "none" || parseFloat(cs.opacity) === 0) return false;
-  return true;
-}
-function cssEscape(s) {
-  return String(s).replace(/["\\]/g, "\\$&");
+function cssEscape(value) {
+  return String(value || "").replace(/["\\]/g, "\\$&");
 }
 
 // src/agent/interact.js
@@ -312,7 +352,7 @@ function timeout(ms, msg) {
   return new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms));
 }
 
-// src/widget/highlight.js
+// src/widget/highlight.ts
 var highlight_exports = {};
 __export(highlight_exports, {
   cleanup: () => cleanup,
@@ -325,44 +365,66 @@ var listenersAttached = false;
 var lastPointer = getInitialPointer();
 function ensureStyle() {
   if (document.getElementById(STYLE_ID)) return;
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const style = document.createElement("style");
   style.id = STYLE_ID;
   style.textContent = `
     #${ROOT_ID} { position: fixed; inset: 0; pointer-events: none; z-index: 2147483600; }
     #${ROOT_ID} .gd-focus {
       position: fixed;
-      border: 1px solid rgba(31, 41, 55, .18);
+      border: 1px solid rgba(31, 41, 55, .16);
       background: rgba(59, 130, 246, .04);
       box-shadow: 0 18px 48px rgba(15, 23, 42, .08), 0 0 0 10px rgba(59, 130, 246, .08);
-      border-radius: 16px;
-      ${reduce ? "" : "transition: all .34s cubic-bezier(.2,.8,.2,1);"}
+      border-radius: 18px;
+      ${reduceMotion ? "" : "transition: all .22s ease-out;"}
     }
-    #${ROOT_ID} .gd-pointer {
+    #${ROOT_ID} .gd-target {
       position: fixed;
-      width: 24px;
-      height: 24px;
+      width: 34px;
+      height: 34px;
+      margin-left: -10px;
+      margin-top: -10px;
       transform-origin: 7px 7px;
-      ${reduce ? "" : "transition: left .42s cubic-bezier(.2,.8,.2,1), top .42s cubic-bezier(.2,.8,.2,1);"}
+      ${reduceMotion ? "" : "transition: left .18s ease-out, top .18s ease-out;"}
     }
-    #${ROOT_ID} .gd-pointer::before {
+    #${ROOT_ID} .gd-target::before {
       content: '';
       position: absolute;
       inset: 0;
-      clip-path: polygon(0 0, 68% 58%, 43% 63%, 57% 100%, 43% 100%, 31% 66%, 0 0);
+      clip-path: polygon(2% 2%, 74% 56%, 49% 61%, 64% 100%, 48% 100%, 34% 66%, 2% 2%);
       background: var(--gd-accent, #3b82f6);
-      filter: drop-shadow(0 10px 18px rgba(59, 130, 246, .28));
+      filter: drop-shadow(0 12px 22px rgba(59, 130, 246, .28));
     }
-    #${ROOT_ID} .gd-pointer::after {
+    #${ROOT_ID} .gd-target::after {
       content: '';
       position: absolute;
-      left: -6px;
-      top: -6px;
+      left: -10px;
+      top: -10px;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 1px solid rgba(59, 130, 246, .24);
+      background: rgba(59, 130, 246, .08);
+    }
+    #${ROOT_ID} .gd-follower {
+      position: fixed;
       width: 18px;
       height: 18px;
+      margin-left: -9px;
+      margin-top: -9px;
       border-radius: 999px;
-      border: 1px solid rgba(59, 130, 246, .22);
-      background: rgba(59, 130, 246, .08);
+      border: 1px solid rgba(15, 23, 42, .12);
+      background: rgba(255, 255, 255, .78);
+      box-shadow: 0 10px 22px rgba(15, 23, 42, .12);
+      backdrop-filter: blur(10px);
+      ${reduceMotion ? "" : "transition: left .08s linear, top .08s linear;"}
+    }
+    #${ROOT_ID} .gd-line {
+      position: fixed;
+      height: 2px;
+      transform-origin: 0 50%;
+      background: linear-gradient(90deg, rgba(59,130,246,.42), rgba(59,130,246,.92));
+      ${reduceMotion ? "" : "transition: left .08s linear, top .08s linear, width .12s ease-out, transform .12s ease-out;"}
     }
     #${ROOT_ID} .gd-tip {
       position: fixed;
@@ -375,41 +437,9 @@ function ensureStyle() {
       font: 500 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
       box-shadow: 0 22px 44px rgba(15, 23, 42, .14);
       backdrop-filter: blur(18px);
-      pointer-events: auto;
     }
-    #${ROOT_ID} .gd-tip:focus-within { outline: 2px solid rgba(59, 130, 246, .34); outline-offset: 2px; }
-    #${ROOT_ID} .gd-tip .gd-step {
-      color: rgba(17, 24, 39, .5);
-      font-size: 10px;
-      letter-spacing: .16em;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-    #${ROOT_ID} .gd-tip .gd-title { font-weight: 700; margin-bottom: 4px; }
-    #${ROOT_ID} .gd-tip .gd-body { color: rgba(17, 24, 39, .72); }
-    #${ROOT_ID} .gd-tip .gd-actions { margin-top: 12px; display: flex; gap: 8px; justify-content: flex-start; }
-    #${ROOT_ID} .gd-tip button {
-      background: #111827;
-      color: #fff;
-      border: 0;
-      padding: 8px 12px;
-      border-radius: 999px;
-      font: 600 12px ui-sans-serif, system-ui;
-      cursor: pointer;
-    }
-    #${ROOT_ID} .gd-tip button.gd-secondary {
-      background: transparent;
-      color: rgba(17, 24, 39, .65);
-      border: 1px solid rgba(15, 23, 42, .08);
-    }
-    #${ROOT_ID} .gd-tip button:focus-visible { outline: 2px solid rgba(59, 130, 246, .34); outline-offset: 2px; }
-    #${ROOT_ID} .gd-line {
-      position: fixed;
-      height: 1px;
-      transform-origin: 0 50%;
-      background: linear-gradient(90deg, rgba(59,130,246,.72), rgba(59,130,246,0));
-      ${reduce ? "" : "transition: left .34s cubic-bezier(.2,.8,.2,1), top .34s cubic-bezier(.2,.8,.2,1), width .34s cubic-bezier(.2,.8,.2,1), transform .34s cubic-bezier(.2,.8,.2,1);"}
-    }
+    #${ROOT_ID} .gd-title { font-weight: 700; margin-bottom: 4px; }
+    #${ROOT_ID} .gd-body { color: rgba(17, 24, 39, .72); }
     @media (prefers-contrast: more) {
       #${ROOT_ID} .gd-focus { box-shadow: 0 0 0 4px rgba(255,255,255,.4); }
       #${ROOT_ID} .gd-tip { background: #fff; color: #000; border-color: #000; }
@@ -425,7 +455,9 @@ function ensureRoot(accent) {
     root.setAttribute("aria-live", "polite");
     document.body.appendChild(root);
   }
-  if (accent) root.style.setProperty("--gd-accent", accent);
+  if (accent) {
+    root.style.setProperty("--gd-accent", accent);
+  }
   return root;
 }
 function cleanup() {
@@ -436,30 +468,16 @@ function cleanup() {
     window.removeEventListener("resize", onReposition, true);
     window.removeEventListener("scroll", onReposition, true);
     document.removeEventListener("mousemove", onMouseMove, true);
-    document.removeEventListener("keydown", onKeydown, true);
     listenersAttached = false;
   }
   activeReposition = null;
-  activeKeyHandlers = null;
 }
-var activeKeyHandlers = null;
 function onReposition() {
   activeReposition == null ? void 0 : activeReposition();
 }
-function onMouseMove(e) {
-  lastPointer = { x: e.clientX, y: e.clientY };
-}
-function onKeydown(e) {
-  var _a, _b, _c, _d;
-  if (!activeKeyHandlers) return;
-  if (e.key === "Escape") {
-    e.preventDefault();
-    (_a = activeKeyHandlers.skip) == null ? void 0 : _a.call(activeKeyHandlers);
-  }
-  if (e.key === "Enter" && (((_c = (_b = e.target) == null ? void 0 : _b.closest) == null ? void 0 : _c.call(_b, `#${ROOT_ID}`)) || document.activeElement === document.body)) {
-    e.preventDefault();
-    (_d = activeKeyHandlers.next) == null ? void 0 : _d.call(activeKeyHandlers);
-  }
+function onMouseMove(event) {
+  lastPointer = { x: event.clientX, y: event.clientY };
+  activeReposition == null ? void 0 : activeReposition();
 }
 function getInitialPointer() {
   if (typeof window === "undefined") {
@@ -470,115 +488,100 @@ function getInitialPointer() {
     y: Math.round(window.innerHeight - 80)
   };
 }
-async function show({ element, title, body, stepIndex, totalSteps, accent, onNext, onSkip }) {
+async function show({ element, title, body, accent }) {
   ensureStyle();
   const root = ensureRoot(accent);
   root.innerHTML = "";
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  element.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center", inline: "center" });
-  await new Promise((r) => setTimeout(r, reduce ? 0 : 250));
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  element.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center", inline: "center" });
+  await new Promise((resolve) => window.setTimeout(resolve, reduceMotion ? 0 : 180));
   const focus = document.createElement("div");
   focus.className = "gd-focus";
   root.appendChild(focus);
-  const pointer = document.createElement("div");
-  pointer.className = "gd-pointer";
-  root.appendChild(pointer);
+  const follower = document.createElement("div");
+  follower.className = "gd-follower";
+  root.appendChild(follower);
   const line = document.createElement("div");
   line.className = "gd-line";
   root.appendChild(line);
+  const target = document.createElement("div");
+  target.className = "gd-target";
+  root.appendChild(target);
   const tip = document.createElement("div");
   tip.className = "gd-tip";
-  tip.setAttribute("role", "dialog");
-  tip.setAttribute("aria-live", "assertive");
-  tip.setAttribute("aria-label", `Guider step ${stepIndex + 1} of ${totalSteps}: ${title || ""}`);
+  tip.setAttribute("role", "status");
   tip.innerHTML = `
-    <div class="gd-step">Step ${stepIndex + 1} of ${totalSteps}</div>
     <div class="gd-title"></div>
     <div class="gd-body"></div>
-    <div class="gd-actions">
-      <button class="gd-secondary" type="button" data-act="skip" data-guider="guider-skip">Skip</button>
-      <button type="button" data-act="next" data-guider="guider-next">${stepIndex + 1 === totalSteps ? "Done" : "Next"}</button>
-    </div>
   `;
-  tip.querySelector(".gd-title").textContent = title || "";
-  tip.querySelector(".gd-body").textContent = body || "";
+  const titleElement = tip.querySelector(".gd-title");
+  const bodyElement = tip.querySelector(".gd-body");
+  if (titleElement) {
+    titleElement.textContent = title || "Go here";
+  }
+  if (bodyElement) {
+    bodyElement.textContent = body || "";
+  }
   root.appendChild(tip);
-  tip.querySelector("[data-act=next]").onclick = () => onNext == null ? void 0 : onNext();
-  tip.querySelector("[data-act=skip]").onclick = () => onSkip == null ? void 0 : onSkip();
-  setTimeout(() => {
-    var _a;
-    return (_a = tip.querySelector("[data-act=next]")) == null ? void 0 : _a.focus({ preventScroll: true });
-  }, 60);
   const reposition = () => {
-    const r = element.getBoundingClientRect();
-    const pad = 10;
-    const W = innerWidth, H = innerHeight;
-    focus.style.cssText = `top:${r.top - pad}px;left:${r.left - pad}px;width:${r.width + 2 * pad}px;height:${r.height + 2 * pad}px;`;
-    const tipW = Math.min(280, W - 24);
-    const tipH = tip.offsetHeight || 110;
-    let tx, ty, side;
-    if (r.right + tipW + 24 < W) {
-      tx = r.right + 18;
-      ty = Math.max(8, Math.min(H - tipH - 8, r.top));
-      side = "left";
-    } else if (r.bottom + tipH + 24 < H) {
-      tx = Math.max(8, Math.min(W - tipW - 8, r.left));
-      ty = r.bottom + 18;
-      side = "top";
-    } else {
-      tx = Math.max(8, Math.min(W - tipW - 8, r.left));
-      ty = Math.max(8, r.top - tipH - 18);
-      side = "bottom";
+    const rect = element.getBoundingClientRect();
+    const padding = 10;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    focus.style.cssText = `top:${rect.top - padding}px;left:${rect.left - padding}px;width:${rect.width + 2 * padding}px;height:${rect.height + 2 * padding}px;`;
+    const tipWidth = Math.min(280, viewportWidth - 24);
+    const tipHeight = tip.offsetHeight || 96;
+    let tipLeft = rect.right + 20;
+    let tipTop = Math.max(8, Math.min(viewportHeight - tipHeight - 8, rect.top));
+    if (tipLeft + tipWidth > viewportWidth - 8) {
+      tipLeft = Math.max(8, Math.min(viewportWidth - tipWidth - 8, rect.left));
+      tipTop = rect.bottom + tipHeight + 20 < viewportHeight ? rect.bottom + 18 : Math.max(8, rect.top - tipHeight - 18);
     }
-    tip.style.left = `${tx}px`;
-    tip.style.top = `${ty}px`;
-    const targetX = r.left + Math.min(r.width * 0.45, 22);
-    const targetY = r.top + Math.min(r.height * 0.5, 22);
-    pointer.style.left = `${targetX}px`;
-    pointer.style.top = `${targetY}px`;
+    tip.style.left = `${tipLeft}px`;
+    tip.style.top = `${tipTop}px`;
+    const targetX = rect.left + Math.min(rect.width * 0.5, 30);
+    const targetY = rect.top + Math.min(rect.height * 0.5, 30);
     const startX = lastPointer.x;
     const startY = lastPointer.y;
-    const endX = tx + (side === "left" ? 0 : tipW * 0.5);
-    const endY = ty + (side === "top" ? 0 : tipH * 0.5);
-    const dx = endX - startX;
-    const dy = endY - startY;
-    const length = Math.hypot(dx, dy);
+    follower.style.left = `${startX}px`;
+    follower.style.top = `${startY}px`;
+    target.style.left = `${targetX}px`;
+    target.style.top = `${targetY}px`;
+    const dx = targetX - startX;
+    const dy = targetY - startY;
     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    const length = Math.max(0, Math.hypot(dx, dy) - 18);
     line.style.left = `${startX}px`;
     line.style.top = `${startY}px`;
     line.style.width = `${length}px`;
     line.style.transform = `rotate(${angle}deg)`;
-    lastPointer = { x: targetX, y: targetY };
   };
   reposition();
   activeReposition = reposition;
-  activeKeyHandlers = { next: onNext, skip: onSkip };
   if (!listenersAttached) {
     window.addEventListener("resize", onReposition, true);
     window.addEventListener("scroll", onReposition, true);
     document.addEventListener("mousemove", onMouseMove, true);
-    document.addEventListener("keydown", onKeydown, true);
     listenersAttached = true;
   }
 }
 
-// src/agent/index.js
+// src/agent/index.ts
 var agentMode = {
   available: true,
-  /**
-   * Execute a plan returned by the widget LLM.
-   *
-   * @param {{
-   *   plan: { steps: Array<{ title:string, body?:string, selectors:any[], visualHint?:string,
-   *                          expectedRoute?:string|null, action?:{kind:string, value?:any, key?:string} }>,
-   *           confidence: 'high'|'medium'|'low' },
-   *   onProgress?: (event: { phase: 'starting'|'completed'|'failed', index: number, step: object, action?: string, error?: string }) => void,
-   *   signal?: AbortSignal,
-   *   showHighlight?: boolean,
-   * }} args
-   */
-  async run({ plan, onProgress, signal, showHighlight = true }) {
-    return runPlan(plan, { onProgress, signal, showHighlight, highlight: highlight_exports });
+  async run({
+    plan,
+    onProgress,
+    signal,
+    showHighlight = true
+  }) {
+    const progressHandler = onProgress ? (event) => onProgress(event) : void 0;
+    return runPlan(plan, {
+      onProgress: progressHandler,
+      signal,
+      showHighlight,
+      highlight: highlight_exports
+    });
   }
 };
 export {

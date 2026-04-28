@@ -8,24 +8,21 @@ export interface SelectorCandidate {
   tag?: string;
 }
 
-export interface PlanStep {
+export interface GuidanceTarget {
   title: string;
   body?: string;
   selectors: SelectorCandidate[];
   visualHint?: string;
   expectedRoute?: string | null;
-  action?:
-    | { kind: 'click' }
-    | { kind: 'type'; value: string; clear?: boolean }
-    | { kind: 'select'; value: string }
-    | { kind: 'press'; key: string };
-  value?: string;
 }
 
-export interface Plan {
-  steps: PlanStep[];
+export interface GuidanceResponse {
+  summary?: string | null;
+  immediateSpeech?: string | null;
+  target: GuidanceTarget | null;
+  routeIntent?: string | null;
   confidence: 'high' | 'medium' | 'low';
-  fallbackMessage: string | null;
+  fallbackMessage?: string | null;
 }
 
 export interface GuiderWidgetProps {
@@ -45,14 +42,10 @@ export interface GuiderWidgetProps {
   whisperUrl?: string;
   /** Override route detection (defaults to window.location.pathname) */
   currentRoute?: string;
-  /** Launcher position */
-  position?: 'bottom-right' | 'bottom-left';
-  /** Hex accent color (default: '#f5d042') */
+  /** Hex accent color (default: '#3080ff') */
   accent?: string;
-  /** Show the Agent Mode toggle (default: true) */
-  agent?: boolean;
-  /** Greeting copy in the empty panel */
-  greeting?: string;
+  /** Enable speech synthesis output. Default true. */
+  speak?: boolean;
 }
 
 export const GuiderWidget: React.FC<GuiderWidgetProps>;
@@ -62,11 +55,29 @@ export function useGuider(): any;
 export const agentMode: {
   available: boolean;
   run(args: {
-    plan: Plan;
+    plan: {
+      steps: Array<{
+        title: string;
+        body?: string;
+        selectors: SelectorCandidate[];
+        visualHint?: string;
+        expectedRoute?: string | null;
+        action?: { kind: 'click' | 'type' | 'select' | 'press'; value?: string; key?: string; clear?: boolean };
+        value?: string;
+      }>;
+      confidence: 'high' | 'medium' | 'low';
+      fallbackMessage?: string | null;
+    };
     onProgress?: (event: {
       phase: 'starting' | 'completed' | 'failed';
       index: number;
-      step: PlanStep;
+      step: {
+        title: string;
+        body?: string;
+        selectors: SelectorCandidate[];
+        visualHint?: string;
+        expectedRoute?: string | null;
+      };
       action?: string;
       error?: string;
     }) => void;
