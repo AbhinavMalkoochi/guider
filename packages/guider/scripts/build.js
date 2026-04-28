@@ -12,15 +12,15 @@ const shared = {
   platform: 'browser',
   target: ['es2020', 'chrome90', 'firefox90', 'safari14'],
   jsx: 'automatic',
-  loader: { '.js': 'jsx', '.jsx': 'jsx' },
+  loader: { '.js': 'jsx', '.jsx': 'jsx', '.ts': 'ts', '.tsx': 'tsx' },
   external: ['react', 'react-dom', 'react/jsx-runtime', 'html2canvas'],
   logLevel: 'info',
   banner: { js: '"use client";' },
 };
 
 await Promise.all([
-  build({ ...shared, entryPoints: [path.join(root, 'src/widget/index.js')], outfile: path.join(root, 'dist/widget.mjs'), format: 'esm' }),
-  build({ ...shared, entryPoints: [path.join(root, 'src/widget/index.js')], outfile: path.join(root, 'dist/widget.cjs'), format: 'cjs' }),
+  build({ ...shared, entryPoints: [path.join(root, 'src/widget/index.ts')], outfile: path.join(root, 'dist/widget.mjs'), format: 'esm' }),
+  build({ ...shared, entryPoints: [path.join(root, 'src/widget/index.ts')], outfile: path.join(root, 'dist/widget.cjs'), format: 'cjs' }),
   build({ ...shared, entryPoints: [path.join(root, 'src/agent/index.js')], outfile: path.join(root, 'dist/agent.mjs'), format: 'esm' }),
   build({ ...shared, entryPoints: [path.join(root, 'src/agent/index.js')], outfile: path.join(root, 'dist/agent.cjs'), format: 'cjs' }),
 ]);

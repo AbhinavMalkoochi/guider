@@ -28,6 +28,7 @@
   ],
   "scripts": {
     "build": "node scripts/build.js",
+    "typecheck": "tsc --noEmit",
     "test:scan": "node bin/guider.js init --cwd ./examples/sample-next-app --dry-run --no-llm"
   },
   "engines": {
@@ -60,6 +61,8 @@
     "prompts": "^2.4.2"
   },
   "devDependencies": {
-    "esbuild": "^0.24.0"
+    "@types/react": "^19.2.2",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.9.3"
   }
 }
