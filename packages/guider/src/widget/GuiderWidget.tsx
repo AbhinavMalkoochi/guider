@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type MutableR
 import { captureViewport } from './screenshot.js';
 import { VoiceRecorder, transcribeWithWhisper, type VoiceCaptureResult, type VoiceStopReason } from './voice';
 import { findElement } from './selectors.js';
-import { cleanup as cleanupHighlight, show as showHighlight } from './highlight.js';
+import { cleanup as cleanupHighlight, show as showHighlight } from './highlight';
 import { planGuidance, streamPlanGuidance } from './llm.js';
 
 type MapData = Record<string, unknown> | null;
@@ -147,22 +147,7 @@ export function GuiderWidget({
       element: found.el,
       title: step.title,
       body: step.body,
-      stepIndex: index,
-      totalSteps: plan.steps.length,
       accent,
-      onNext: () => {
-        const nextIndex = index + 1;
-        if (nextIndex >= plan.steps.length) {
-          cleanupHighlight();
-          announce('Done.', 1800);
-          return;
-        }
-        void highlightStep(plan, nextIndex);
-      },
-      onSkip: () => {
-        cleanupHighlight();
-        announce('Skipped.', 1600);
-      },
     });
   }, [accent, announce]);
 

@@ -6,7 +6,7 @@
  * back to the caller so the UI can re-ask the LLM with a fresh screenshot).
  */
 import { runPlan } from './runner.js';
-import * as highlight from '../widget/highlight.js';
+import * as highlight from '../widget/highlight';
 
 export const agentMode = {
   available: true,
