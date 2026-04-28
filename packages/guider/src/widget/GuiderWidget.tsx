@@ -1,34 +1,18 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MutableRefObject } from 'react';
-import { captureViewport } from './screenshot.js';
+import { captureViewport } from './screenshot';
 import { VoiceRecorder, transcribeWithWhisper, type VoiceCaptureResult, type VoiceStopReason } from './voice';
-import { findElement } from './selectors.js';
+import { findElement, type SelectorCandidate } from './selectors';
 import { cleanup as cleanupHighlight, show as showHighlight } from './highlight';
-import { planGuidance, streamPlanGuidance } from './llm.js';
+import { planGuidance, streamPlanGuidance, type GuidanceResponse, type GuidanceTarget } from './llm';
 
 type MapData = Record<string, unknown> | null;
 
-type GuidanceSelector =
-  | string
-  | {
-      kind?: string;
-      value?: string;
-      role?: string;
-      name?: string;
-      tag?: string;
-    };
-
-type GuidanceStep = {
+type GuidanceStep = GuidanceTarget & {
   title: string;
   body?: string;
   visualHint?: string;
-  selectors?: GuidanceSelector[];
+  selectors?: SelectorCandidate[];
   expectedRoute?: string | null;
-};
-
-type GuidancePlan = {
-  steps: GuidanceStep[];
-  confidence?: 'high' | 'medium' | 'low';
-  fallbackMessage?: string | null;
 };
 
 type WidgetPhase = 'idle' | 'listening' | 'transcribing' | 'guiding';
@@ -125,19 +109,18 @@ export function GuiderWidget({
     flashStatus(text, duration, setStatusText, statusTimerRef);
   }, [speak]);
 
-  const highlightStep = useCallback(async (plan: GuidancePlan, index: number) => {
+  const highlightTarget = useCallback(async (target: GuidanceTarget | null) => {
     cleanupHighlight();
-    const step = plan.steps[index];
-    if (!step) return;
+    if (!target) return;
 
-    const found = findElement(step.selectors);
+    const found = findElement(target.selectors);
     if (!found) {
-      announce(`I couldn't verify that on this screen. Look for ${step.visualHint || step.title}.`, 3200);
+      announce(`I couldn't verify that on this screen. Look for ${target.visualHint || target.title}.`, 3200);
       return;
     }
 
     announce(
-      [step.title, step.body, step.visualHint ? `Look for ${step.visualHint}.` : '']
+      [target.title, target.body, target.visualHint ? `Look for ${target.visualHint}.` : '']
         .filter(Boolean)
         .join(' '),
       3200,
@@ -145,8 +128,8 @@ export function GuiderWidget({
 
     await showHighlight({
       element: found.el,
-      title: step.title,
-      body: step.body,
+      title: target.title,
+      body: target.body,
       accent,
     });
   }, [accent, announce]);
@@ -168,26 +151,27 @@ export function GuiderWidget({
 
     try {
       const screenshotDataUrl = await captureViewport();
-      let plan: GuidancePlan;
+      let guidance: GuidanceResponse;
 
       if (proxyUrl) {
-        const streamedSteps: GuidanceStep[] = [];
-        plan = await streamPlanGuidance({
+        guidance = await streamPlanGuidance({
           question,
           currentRoute: route,
           map,
           screenshotDataUrl,
           proxyUrl,
           signal: controller.signal,
-          onStep: (step: GuidanceStep) => {
-            streamedSteps.push(step);
-            if (streamedSteps.length === 1) {
-              void highlightStep({ steps: streamedSteps }, 0);
+          onAck: (message) => {
+            if (message) {
+              flashStatus(message, 1200, setStatusText, statusTimerRef);
             }
           },
-        }) as GuidancePlan;
+          onTarget: (target) => {
+            void highlightTarget(target);
+          },
+        });
       } else {
-        plan = await planGuidance({
+        guidance = await planGuidance({
           question,
           currentRoute: route,
           map,
@@ -196,15 +180,15 @@ export function GuiderWidget({
           model,
           endpoint,
           signal: controller.signal,
-        }) as GuidancePlan;
+        });
       }
 
-      if (plan.confidence === 'low' || !plan.steps?.length) {
-        announce(plan.fallbackMessage || "I'm not confident about where to point you.", 3200);
+      if (guidance.confidence === 'low' || !guidance.target) {
+        announce(guidance.fallbackMessage || "I'm not confident about where to point you.", 3200);
         return;
       }
 
-      await highlightStep(plan, 0);
+      await highlightTarget(guidance.target);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
         announce(`Sorry — ${String(error instanceof Error ? error.message : error)}`, 3600);
@@ -213,7 +197,7 @@ export function GuiderWidget({
       setBusy(false);
       setPhase('idle');
     }
-  }, [apiKey, endpoint, highlightStep, map, model, proxyUrl, route, announce]);
+  }, [apiKey, endpoint, highlightTarget, map, model, proxyUrl, route, announce]);
 
   const finishVoiceCapture = useCallback((reason: VoiceStopReason) => {
     if (finishingVoiceRef.current) {

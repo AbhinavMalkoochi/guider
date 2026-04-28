@@ -8,32 +8,35 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-const SYSTEM_PROMPT = `You are Guider, a navigation assistant embedded in a Next.js app.
+const SYSTEM_PROMPT = `You are Guider, a navigation assistant embedded in a web app.
 You receive: the app's site map JSON, the user's current route, a screenshot of the user's
 current viewport, and the user's question.
 
-Your job: produce a step-by-step plan that points the user to the exact element(s) they need.
+Your job: return one grounded guidance target that the user can act on right now.
 
 Output ONE JSON object (no prose, no markdown). Shape:
 {
-  "steps": [
-    { "title": "...", "body": "...",
-      "selectors": [
-        { "kind": "data-guider"|"testid"|"aria"|"role-name"|"text"|"css",
-          "value":"...", "role":"...", "name":"...", "tag":"..." }
-      ],
-      "visualHint": "...",
-      "expectedRoute": "..." | null,
-      "action": { "kind":"click"|"type"|"select"|"press", "value":"...", "key":"..." }
-    }
-  ],
+  "summary": "short summary",
+  "immediateSpeech": "one short sentence the assistant can say immediately",
+  "target": {
+    "title": "...",
+    "body": "...",
+    "selectors": [
+      { "kind": "data-guider"|"testid"|"aria"|"role-name"|"text"|"css",
+        "value":"...", "role":"...", "name":"...", "tag":"..." }
+    ],
+    "visualHint": "...",
+    "expectedRoute": "..." | null
+  },
+  "routeIntent": "..." | null,
   "confidence": "high"|"medium"|"low",
   "fallbackMessage": "string|null"
 }
 Rules:
-- Use the screenshot for what's visible; the map for what exists.
-- Selectors ranked stable-first. Always include a visualHint as fallback.
-- If unsure: confidence "low" + fallbackMessage. Do not invent UI.
+- Use the screenshot for what's visible and the map for what exists.
+- Return exactly one best target, not a multi-step plan.
+- Never invent UI or routes that are not in the map.
+- If unsure, confidence must be "low" with a fallbackMessage.
 `;
 
 function compactMap(m: any, currentRoute: string) {
@@ -94,6 +97,8 @@ export const plan = httpAction(async (ctx, request) => {
   // Run async processing to pipe to stream
   (async () => {
     try {
+      sse("ack", { message: "Finding the best place on this screen." });
+
       const messages: any[] = [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -125,14 +130,17 @@ export const plan = httpAction(async (ctx, request) => {
         return;
       }
 
-      for (const step of parsed.steps || []) {
-        sse("step", step);
-        await new Promise((r) => setTimeout(r, 30));
+      const guidance = validateGuidance(parsed, siteMap);
+      if (guidance.target) {
+        sse("target", guidance);
       }
 
       sse("done", {
-        confidence: parsed.confidence || "medium",
-        fallbackMessage: parsed.fallbackMessage,
+        summary: guidance.summary,
+        immediateSpeech: guidance.immediateSpeech,
+        routeIntent: guidance.routeIntent,
+        confidence: guidance.confidence,
+        fallbackMessage: guidance.fallbackMessage,
       });
     } catch (e: any) {
       sse("error", e.message);
@@ -172,7 +180,7 @@ export const transcribe = httpAction(async (ctx, request) => {
     const upload = await toFile(await file.arrayBuffer(), filename, { type: file.type || "audio/webm" });
     const response = await openai.audio.transcriptions.create({
       file: upload,
-      model: "whisper-1",
+      model: "gpt-4o-mini-transcribe",
     });
 
     return new Response(JSON.stringify({ text: response.text }), {
@@ -198,4 +206,74 @@ function inferAudioFilename(contentType: string) {
   if (contentType.includes("mpeg") || contentType.includes("mp3")) return "voice.mp3";
   if (contentType.includes("wav")) return "voice.wav";
   return "voice.webm";
+}
+
+function validateGuidance(payload: any, siteMap: { pages: any[] }) {
+  const target = isMapBackedTarget(payload?.target, siteMap) ? normalizeTarget(payload.target) : null;
+  const routeIntent = typeof payload?.routeIntent === "string" ? payload.routeIntent : null;
+  const routeExists = !routeIntent || siteMap.pages.some((page: any) => page.route === routeIntent);
+
+  if (!target || !routeExists) {
+    return {
+      summary: null,
+      immediateSpeech: null,
+      target: null,
+      routeIntent: null,
+      confidence: "low",
+      fallbackMessage: payload?.fallbackMessage || "I can't verify that from the site map and current screen.",
+    };
+  }
+
+  return {
+    summary: typeof payload?.summary === "string" ? payload.summary : null,
+    immediateSpeech: typeof payload?.immediateSpeech === "string" ? payload.immediateSpeech : null,
+    target,
+    routeIntent,
+    confidence: payload?.confidence === "high" || payload?.confidence === "medium" ? payload.confidence : "medium",
+    fallbackMessage: typeof payload?.fallbackMessage === "string" ? payload.fallbackMessage : null,
+  };
+}
+
+function normalizeTarget(target: any) {
+  if (!target || typeof target.title !== "string" || !Array.isArray(target.selectors) || target.selectors.length === 0) {
+    return null;
+  }
+  return {
+    title: target.title,
+    body: typeof target.body === "string" ? target.body : "",
+    selectors: target.selectors,
+    visualHint: typeof target.visualHint === "string" ? target.visualHint : "",
+    expectedRoute: typeof target.expectedRoute === "string" ? target.expectedRoute : null,
+  };
+}
+
+function isMapBackedTarget(target: any, siteMap: { pages: any[] }) {
+  if (!target || !Array.isArray(target.selectors) || target.selectors.length === 0) {
+    return false;
+  }
+
+  const interactive = siteMap.pages.flatMap((page: any) => page.interactive || []);
+  return target.selectors.some((selector: any) => {
+    if (!selector || typeof selector !== "object") return false;
+    return interactive.some((entry: any) => {
+      const label = String(entry.label || "").toLowerCase();
+      const guiderId = String(entry.guiderId || "").toLowerCase();
+      const testId = String(entry.testId || "").toLowerCase();
+      const ariaLabel = String(entry.aria?.label || "").toLowerCase();
+      switch (selector.kind) {
+        case "data-guider":
+          return guiderId && guiderId === String(selector.value || "").toLowerCase();
+        case "testid":
+          return testId && testId === String(selector.value || "").toLowerCase();
+        case "aria":
+          return ariaLabel && ariaLabel === String(selector.value || "").toLowerCase();
+        case "text":
+          return label.includes(String(selector.value || "").toLowerCase());
+        case "role-name":
+          return label.includes(String(selector.name || "").toLowerCase());
+        default:
+          return false;
+      }
+    });
+  });
 }
